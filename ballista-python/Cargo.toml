@@ -1,0 +1,51 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+[package]
+name = "ballista-python"
+version = "0.6.0"
+homepage = "https://github.com/apache/arrow"
+repository = "https://github.com/apache/arrow"
+authors = ["Apache Arrow <dev@arrow.apache.org>"]
+description = "Build and run queries against data"
+readme = "README.md"
+license = "Apache-2.0"
+edition = "2021"
+rust-version = "1.57"
+
+[package.metadata.maturin]
+name = "ballista._internal"
+
+[dependencies]
+ballista = { git = "https://github.com/apache/arrow-ballista", rev = "9e78b8ecd55cc3e9d46387c87098c4e6625294eb" }
+datafusion = { git = "https://github.com/apache/arrow-datafusion", rev = "585bc3a629b92ea7a86ebfe8bf762dbef4155710", features = ["pyarrow"] }
+datafusion-common = { git = "https://github.com/apache/arrow-datafusion", rev = "585bc3a629b92ea7a86ebfe8bf762dbef4155710" }
+datafusion-expr = { git = "https://github.com/apache/arrow-datafusion", rev = "585bc3a629b92ea7a86ebfe8bf762dbef4155710" }
+
+mimalloc = { version = "*", default-features = false }
+pyo3 = { version = "~0.16.5", features = ["extension-module", "abi3", "abi3-py37"] }
+rand = "0.7"
+tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+uuid = { version = "0.8", features = ["v4"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "ballista_python"
+
+[profile.release]
+codegen-units = 1
+lto = true

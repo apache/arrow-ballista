@@ -1,0 +1,106 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Python test
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.repository }}-${{ github.head_ref || github.sha }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  test-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+        toolchain:
+          - "stable"
+          - "beta"
+          # we are not that much eager in walking on the edge yet
+          # - nightly
+        # build stable for only 3.7
+        include:
+          - python-version: "3.7"
+            toolchain: "stable"
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        id: rust-toolchain
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v2
+        with:
+          path: ~/.cargo
+          key: cargo-cache-${{ steps.rust-toolchain.outputs.rustc_hash }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Check Formatting
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.python-version == '3.10' && matrix.toolchain == 'stable' }}
+        with:
+          command: fmt
+          args: -- --check
+
+      - name: Run Clippy
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.python-version == '3.10' && matrix.toolchain == 'stable' }}
+        with:
+          command: clippy
+          args: --all-targets --all-features -- -D clippy::all
+
+      - name: Create Virtualenv (3.10)
+        if: ${{ matrix.python-version == '3.10' }}
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements-310.txt
+
+      - name: Create Virtualenv (3.7)
+        if: ${{ matrix.python-version == '3.7' }}
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install -r requirements-37.txt
+
+      - name: Run Python Linters
+        if: ${{ matrix.python-version == '3.10' && matrix.toolchain == 'stable' }}
+        run: |
+          source venv/bin/activate
+          flake8 --exclude venv --ignore=E501
+          black --line-length 79 --diff --check .
+
+      - name: Run tests
+        run: |
+          source venv/bin/activate
+          maturin develop --cargo-extra-args='--locked'
+          RUST_BACKTRACE=1 pytest -v .
