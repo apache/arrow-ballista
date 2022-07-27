@@ -34,7 +34,7 @@ name = "datafusion._internal"
 datafusion = { git = "https://github.com/apache/arrow-datafusion", rev = "7607ace992a5a42840bf546221a8635e70e10885", features = ["pyarrow"] }
 pyo3 = { version = "0.14", features = ["extension-module", "abi3", "abi3-py36"] }
 rand = "0.7"
-tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+tokio = { version = "1.13", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [lib]
