@@ -36,5 +36,5 @@ datafusion-cli = { git = "https://github.com/apache/arrow-datafusion", rev = "6a
 dirs = "4.0.0"
 env_logger = "0.9"
 mimalloc = { version = "0.1", default-features = false }
-rustyline = "9.0"
+rustyline = "10.0"
 tokio = { version = "1.0", features = ["macros", "rt", "rt-multi-thread", "sync", "parking_lot"] }
