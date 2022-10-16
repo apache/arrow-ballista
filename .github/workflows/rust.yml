@@ -386,43 +386,47 @@ jobs:
           CARGO_HOME: "/github/home/.cargo"
           CARGO_TARGET_DIR: "/github/home/target"
 
-# Coverage job was failing. https://github.com/apache/arrow-datafusion/issues/590 tracks re-instating it
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install protobuf compiler
+        shell: bash
+        run: |
+            mkdir -p $HOME/d/protoc
+            cd $HOME/d/protoc
+            export PROTO_ZIP="protoc-21.4-linux-x86_64.zip"
+            curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
+            unzip $PROTO_ZIP
+            export PATH=$PATH:$HOME/d/protoc/bin
+            protoc --version
+      - name: Setup Rust toolchain
+        run: |
+          rustup toolchain install stable
+          rustup default stable
+          rustup component add rustfmt clippy
+      - name: Cache Cargo
+        uses: actions/cache@v2
+        with:
+          path: /home/runner/.cargo
+          # this key is not equal because the user is different than on a container (runner vs github)
+          key: cargo-coverage-cache3-
+      - name: Run coverage
+        run: |
+          export PATH=$PATH:$HOME/d/protoc/bin
+          export CARGO_HOME="/home/runner/.cargo"
+          export CARGO_TARGET_DIR="/home/runner/target"
 
-# coverage:
-#   name: Coverage
-#   runs-on: ubuntu-latest
-#   strategy:
-#     matrix:
-#       arch: [amd64]
-#       rust: [stable]
-#   steps:
-#     - uses: actions/checkout@v2
-#       with:
-#         submodules: true
-#     - name: Cache Cargo
-#       uses: actions/cache@v2
-#       with:
-#         path: /home/runner/.cargo
-#         # this key is not equal because the user is different than on a container (runner vs github)
-#         key: cargo-coverage-cache-
-#     - name: Cache Rust dependencies
-#       uses: actions/cache@v2
-#       with:
-#         path: /home/runner/target
-#         # this key is not equal because coverage uses different compilation flags.
-#         key: ${{ runner.os }}-${{ matrix.arch }}-target-coverage-cache-${{ matrix.rust }}-
-#     - name: Run coverage
-#       run: |
-#         export ARROW_TEST_DATA=$(pwd)/testing/data
-#         export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
+          export ARROW_TEST_DATA=$(pwd)/testing/data
+          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
 
-#         # 2020-11-15: There is a cargo-tarpaulin regression in 0.17.0
-#         # see https://github.com/xd009642/tarpaulin/issues/618
-#         cargo install --version 0.16.0 cargo-tarpaulin
-#         cargo tarpaulin --out Xml
-#       env:
-#         CARGO_HOME: "/home/runner/.cargo"
-#         CARGO_TARGET_DIR: "/home/runner/target"
-#     - name: Report coverage
-#       continue-on-error: true
-#       run: bash <(curl -s https://codecov.io/bash)
+          rustup toolchain install stable
+          rustup default stable
+          cargo install --version 0.20.1 cargo-tarpaulin
+          cargo tarpaulin --all --out Xml
+      - name: Report coverage
+        continue-on-error: true
+        run: bash <(curl -s https://codecov.io/bash)
