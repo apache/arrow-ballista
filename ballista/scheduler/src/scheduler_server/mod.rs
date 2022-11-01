@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use datafusion::logical_expr::LogicalPlan;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -23,14 +24,12 @@ use ballista_core::error::Result;
 use ballista_core::event_loop::{EventLoop, EventSender};
 use ballista_core::serde::protobuf::{StopExecutorParams, TaskStatus};
 use ballista_core::serde::{AsExecutionPlan, BallistaCodec};
-use ballista_core::utils::default_session_builder;
 
-use datafusion::execution::context::SessionState;
-use datafusion::logical_expr::LogicalPlan;
-use datafusion::prelude::{SessionConfig, SessionContext};
+use datafusion::prelude::SessionContext;
 use datafusion_proto::logical_plan::AsLogicalPlan;
 
 use crate::config::SlotsPolicy;
+use ballista_core::utils::{DefaultSessionBuilder, SessionBuilder};
 use log::{error, warn};
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
@@ -52,8 +51,6 @@ mod external_scaler;
 mod grpc;
 mod query_stage_scheduler;
 
-pub(crate) type SessionBuilder = fn(SessionConfig) -> SessionState;
-
 #[derive(Clone)]
 pub struct SchedulerServer<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> {
     pub scheduler_name: String,
@@ -72,18 +69,14 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         event_loop_buffer_size: usize,
         advertise_endpoint: Option<String>,
     ) -> Self {
-        let state = Arc::new(SchedulerState::new(
-            config,
-            default_session_builder,
-            codec,
-            scheduler_name.clone(),
-            SlotsPolicy::Bias,
-        ));
-
-        SchedulerServer::new_with_state(
+        let session_builder = Arc::new(DefaultSessionBuilder {});
+        SchedulerServer::new_with_policy(
             scheduler_name,
+            config,
             TaskSchedulingPolicy::PullStaged,
-            state,
+            SlotsPolicy::Bias,
+            codec,
+            session_builder,
             event_loop_buffer_size,
             advertise_endpoint,
         )
@@ -93,7 +86,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         scheduler_name: String,
         config: Arc<dyn StateBackendClient>,
         codec: BallistaCodec<T, U>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         event_loop_buffer_size: usize,
         advertise_endpoint: Option<String>,
     ) -> Self {
@@ -120,12 +113,13 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         scheduling_policy: TaskSchedulingPolicy,
         slots_policy: SlotsPolicy,
         codec: BallistaCodec<T, U>,
+        session_builder: Arc<dyn SessionBuilder>,
         event_loop_buffer_size: usize,
         advertise_endpoint: Option<String>,
     ) -> Self {
         let state = Arc::new(SchedulerState::new(
             config,
-            default_session_builder,
+            session_builder,
             codec,
             scheduler_name.clone(),
             slots_policy,

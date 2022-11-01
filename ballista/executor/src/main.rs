@@ -18,6 +18,7 @@
 //! Ballista Rust executor binary.
 
 use chrono::{DateTime, Duration, Utc};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration as Core_Duration, Instant};
@@ -52,8 +53,13 @@ use ballista_executor::shutdown::Shutdown;
 use ballista_executor::shutdown::ShutdownNotifier;
 use ballista_executor::terminate;
 use config::prelude::*;
+use datafusion::datasource::datasource::TableProviderFactory;
 use datafusion::execution::runtime_env::{RuntimeConfig, RuntimeEnv};
 use datafusion_proto::protobuf::LogicalPlanNode;
+#[cfg(feature = "delta")]
+use deltalake::delta_datafusion::{
+    DeltaLogicalCodec, DeltaPhysicalCodec, DeltaTableFactory,
+};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::mpsc;
@@ -166,6 +172,13 @@ async fn main() -> Result<()> {
     let config = with_object_store_provider(
         RuntimeConfig::new().with_temp_file_path(work_dir.clone()),
     );
+    #[cfg(feature = "delta")]
+    let config = {
+        let factory: Arc<(dyn TableProviderFactory + 'static)> =
+            Arc::new(DeltaTableFactory {});
+        let factories = HashMap::from([("deltatable".to_string(), factory)]);
+        config.with_table_factories(factories)
+    };
     let runtime = Arc::new(RuntimeEnv::new(config).map_err(|_| {
         BallistaError::Internal("Failed to init Executor RuntimeEnv".to_owned())
     })?);
@@ -223,7 +236,13 @@ async fn main() -> Result<()> {
 
     let mut scheduler = SchedulerGrpcClient::new(connection);
 
-    let default_codec: BallistaCodec<LogicalPlanNode, PhysicalPlanNode> =
+    #[cfg(feature = "delta")]
+    let codec: BallistaCodec<LogicalPlanNode, PhysicalPlanNode> = BallistaCodec::new(
+        Arc::new(DeltaLogicalCodec {}),
+        Arc::new(DeltaPhysicalCodec {}),
+    );
+    #[cfg(not(feature = "delta"))]
+    let codec: BallistaCodec<LogicalPlanNode, PhysicalPlanNode> =
         BallistaCodec::default();
 
     let scheduler_policy = opt.task_scheduling_policy;
@@ -276,7 +295,7 @@ async fn main() -> Result<()> {
                     scheduler.clone(),
                     bind_host,
                     executor.clone(),
-                    default_codec,
+                    codec,
                     stop_send,
                     &shutdown_noti,
                 )
@@ -287,7 +306,7 @@ async fn main() -> Result<()> {
             service_handlers.push(tokio::spawn(execution_loop::poll_loop(
                 scheduler.clone(),
                 executor.clone(),
-                default_codec,
+                codec,
             )));
         }
     };

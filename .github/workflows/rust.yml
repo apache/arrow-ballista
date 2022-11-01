@@ -120,7 +120,7 @@ jobs:
           export PATH=$PATH:$HOME/d/protoc/bin
           export ARROW_TEST_DATA=$(pwd)/testing/data
           export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
-          cargo test --features flight-sql
+          cargo test --features flight-sql,delta
           cd examples
           cargo run --example standalone_sql --features=ballista/standalone
         env:

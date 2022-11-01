@@ -17,7 +17,7 @@
 
 use datafusion::datasource::listing::{ListingTable, ListingTableUrl};
 use datafusion::datasource::source_as_provider;
-use datafusion::logical_expr::PlanVisitor;
+use datafusion::logical_expr::{LogicalPlan, PlanVisitor};
 use std::any::type_name;
 use std::collections::HashMap;
 use std::future::Future;
@@ -25,7 +25,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
-use crate::scheduler_server::SessionBuilder;
 use crate::state::backend::{Lock, StateBackendClient};
 use crate::state::executor_manager::{ExecutorManager, ExecutorReservation};
 use crate::state::session_manager::SessionManager;
@@ -36,7 +35,7 @@ use crate::state::execution_graph::TaskDescription;
 use ballista_core::error::{BallistaError, Result};
 use ballista_core::serde::protobuf::TaskStatus;
 use ballista_core::serde::{AsExecutionPlan, BallistaCodec};
-use datafusion::logical_expr::LogicalPlan;
+use ballista_core::utils::SessionBuilder;
 use datafusion::physical_plan::display::DisplayableExecutionPlan;
 use datafusion::prelude::SessionContext;
 use datafusion_proto::logical_plan::AsLogicalPlan;
@@ -112,7 +111,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
 
     pub fn new(
         config_client: Arc<dyn StateBackendClient>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         codec: BallistaCodec<T, U>,
         scheduler_name: String,
         slots_policy: SlotsPolicy,
@@ -121,7 +120,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
             executor_manager: ExecutorManager::new(config_client.clone(), slots_policy),
             task_manager: TaskManager::new(
                 config_client.clone(),
-                session_builder,
+                session_builder.clone(),
                 codec.clone(),
                 scheduler_name,
             ),

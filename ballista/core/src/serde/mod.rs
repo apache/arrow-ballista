@@ -20,12 +20,14 @@
 
 use crate::{error::BallistaError, serde::scheduler::Action as BallistaAction};
 use arrow_flight::sql::ProstMessageExt;
+use datafusion::error::DataFusionError;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::execution::FunctionRegistry;
 use datafusion::physical_plan::joins::utils::JoinSide;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion_proto::logical_plan::{
     AsLogicalPlan, DefaultLogicalExtensionCodec, LogicalExtensionCodec,
+    PhysicalExtensionCodec,
 };
 use prost::bytes::BufMut;
 use prost::Message;
@@ -90,21 +92,6 @@ pub trait AsExecutionPlan: Debug + Send + Sync + Clone {
         Self: Sized;
 }
 
-pub trait PhysicalExtensionCodec: Debug + Send + Sync {
-    fn try_decode(
-        &self,
-        buf: &[u8],
-        inputs: &[Arc<dyn ExecutionPlan>],
-        registry: &dyn FunctionRegistry,
-    ) -> Result<Arc<dyn ExecutionPlan>, BallistaError>;
-
-    fn try_encode(
-        &self,
-        node: Arc<dyn ExecutionPlan>,
-        buf: &mut Vec<u8>,
-    ) -> Result<(), BallistaError>;
-}
-
 #[derive(Debug, Clone)]
 pub struct DefaultPhysicalExtensionCodec {}
 
@@ -114,8 +101,8 @@ impl PhysicalExtensionCodec for DefaultPhysicalExtensionCodec {
         _buf: &[u8],
         _inputs: &[Arc<dyn ExecutionPlan>],
         _registry: &dyn FunctionRegistry,
-    ) -> Result<Arc<dyn ExecutionPlan>, BallistaError> {
-        Err(BallistaError::NotImplemented(
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        Err(DataFusionError::NotImplemented(
             "PhysicalExtensionCodec is not provided".to_string(),
         ))
     }
@@ -124,8 +111,8 @@ impl PhysicalExtensionCodec for DefaultPhysicalExtensionCodec {
         &self,
         _node: Arc<dyn ExecutionPlan>,
         _buf: &mut Vec<u8>,
-    ) -> Result<(), BallistaError> {
-        Err(BallistaError::NotImplemented(
+    ) -> Result<(), DataFusionError> {
+        Err(DataFusionError::NotImplemented(
             "PhysicalExtensionCodec is not provided".to_string(),
         ))
     }

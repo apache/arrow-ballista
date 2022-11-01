@@ -31,7 +31,7 @@ executor = "executor_config_spec.toml"
 
 [features]
 default = ["mimalloc"]
-
+delta = ["deltalake"]
 
 [dependencies]
 anyhow = "1"
@@ -42,8 +42,9 @@ ballista-core = { path = "../core", version = "0.9.0" }
 chrono = { version = "0.4", default-features = false }
 configure_me = "0.4.0"
 dashmap = "5.4.0"
-datafusion = { git = "https://github.com/apache/arrow-datafusion", rev = "f4d70ac3e1c4298f9ea5ebb12855a95d60d2b737" }
-datafusion-proto = { git = "https://github.com/apache/arrow-datafusion", rev = "f4d70ac3e1c4298f9ea5ebb12855a95d60d2b737" }
+datafusion = { git = "https://github.com/apache/arrow-datafusion.git", rev = "525ac4567ad8d86ad085d8439d890b1f9e9e6bb9" }
+datafusion-proto = { git = "https://github.com/apache/arrow-datafusion.git", rev = "525ac4567ad8d86ad085d8439d890b1f9e9e6bb9" }
+deltalake = { git = "https://github.com/spaceandtimelabs/delta-rs.git", rev = "520b5c84698641a8fd7d35b0636ff12c2e3d2c2d", features = ["datafusion-ext"], optional = true }
 futures = "0.3"
 hyper = "0.14.4"
 log = "0.4"

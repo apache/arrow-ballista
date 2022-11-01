@@ -55,6 +55,7 @@ use datafusion::physical_plan::{
     AggregateExpr, ExecutionPlan, Partitioning, PhysicalExpr, WindowExpr,
 };
 use datafusion_proto::from_proto::parse_expr;
+use datafusion_proto::logical_plan::PhysicalExtensionCodec;
 use parking_lot::RwLock;
 
 use crate::error::BallistaError;
@@ -69,10 +70,7 @@ use crate::serde::protobuf::physical_plan_node::PhysicalPlanType;
 use crate::serde::protobuf::repartition_exec_node::PartitionMethod;
 use crate::serde::protobuf::{PhysicalExtensionNode, PhysicalPlanNode};
 use crate::serde::scheduler::PartitionLocation;
-use crate::serde::{
-    byte_to_string, proto_error, protobuf, str_to_byte, AsExecutionPlan,
-    PhysicalExtensionCodec,
-};
+use crate::serde::{byte_to_string, proto_error, protobuf, str_to_byte, AsExecutionPlan};
 use crate::{convert_required, into_physical_plan, into_required};
 
 pub mod from_proto;

@@ -15,29 +15,43 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::config::SlotsPolicy;
 use crate::{
     scheduler_server::SchedulerServer, state::backend::standalone::StandaloneClient,
 };
+use ballista_core::config::TaskSchedulingPolicy;
 use ballista_core::serde::protobuf::PhysicalPlanNode;
 use ballista_core::serde::BallistaCodec;
-use ballista_core::utils::create_grpc_server;
+use ballista_core::utils::{create_grpc_server, TableProviderSessionBuilder};
 use ballista_core::{
     error::Result, serde::protobuf::scheduler_grpc_server::SchedulerGrpcServer,
     BALLISTA_VERSION,
 };
+use datafusion::datasource::datasource::TableProviderFactory;
+use datafusion_proto::logical_plan::{LogicalExtensionCodec, PhysicalExtensionCodec};
 use datafusion_proto::protobuf::LogicalPlanNode;
 use log::info;
+use std::collections::HashMap;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 
-pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
+pub async fn new_standalone_scheduler(
+    table_factories: HashMap<String, Arc<dyn TableProviderFactory>>,
+    logical_codec: Arc<dyn LogicalExtensionCodec>,
+    physical_codec: Arc<dyn PhysicalExtensionCodec>,
+) -> Result<SocketAddr> {
     let client = StandaloneClient::try_new_temporary()?;
 
+    let codec = BallistaCodec::new(logical_codec, physical_codec);
+    let session_builder = Arc::new(TableProviderSessionBuilder::new(table_factories));
     let mut scheduler_server: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
-        SchedulerServer::new(
+        SchedulerServer::new_with_policy(
             "localhost:50050".to_owned(),
             Arc::new(client),
-            BallistaCodec::default(),
+            TaskSchedulingPolicy::PullStaged,
+            SlotsPolicy::RoundRobin,
+            codec,
+            session_builder,
             10000,
             None,
         );

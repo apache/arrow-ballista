@@ -394,18 +394,23 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerGrpc
             };
 
             let plan = match query {
-                Query::LogicalPlan(message) => T::try_decode(message.as_slice())
-                    .and_then(|m| {
-                        m.try_into_logical_plan(
+                Query::LogicalPlan(message) => {
+                    let m = T::try_decode(message.as_slice()).map_err(|_| {
+                        Status::internal("Could not parse logical plan protobuf")
+                    })?;
+                    let plan = m
+                        .try_into_logical_plan(
                             session_ctx.deref(),
                             self.state.codec.logical_extension_codec(),
                         )
-                    })
-                    .map_err(|e| {
-                        let msg = format!("Could not parse logical plan protobuf: {}", e);
-                        error!("{}", msg);
-                        Status::internal(msg)
-                    })?,
+                        .map_err(|e| {
+                            let msg =
+                                format!("Could not parse logical plan protobuf: {}", e);
+                            error!("{}", msg);
+                            Status::internal(msg)
+                        })?;
+                    plan
+                }
                 Query::Sql(sql) => session_ctx
                     .sql(&sql)
                     .await
