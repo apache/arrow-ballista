@@ -1,3 +1,5 @@
+#!/bin/bash
+#
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -15,27 +17,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
-name: TypeScript Release Build
+set -e
 
-on:
-  # always trigger
-  push:
-  pull_request:
+echo "Starting nginx web UI..."
+nohup nginx -g "daemon off;" &
 
-jobs:
-  yarn-build:
-    name: Yarn build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nodejs npm
-          npm install -g yarn
+echo "Starting for scheduler..."
+/root/ballista-scheduler &
+while ! nc -z 127.0.0.1 50050; do
+  sleep 1
+done
 
-      - name: Run yarn build
-        run: |
-          cd ballista/scheduler/ui
-          yarn install
-          yarn build
+echo "Starting executor"
+/root/ballista-executor

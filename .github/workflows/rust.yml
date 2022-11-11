@@ -45,312 +45,370 @@ jobs:
           # these represent dependencies downloaded by cargo
           # and thus do not depend on the OS, arch nor rust version.
           path: /github/home/.cargo
-          key: cargo-cache-
+          key: cargo-cache-${{ hashFiles('**/Cargo.toml') }}
       - name: Cache Rust dependencies
         uses: actions/cache@v2
         with:
           # these represent compiled steps of both dependencies and arrow
           # and thus are specific for a particular OS, arch and rust version.
           path: /github/home/target
-          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}-
+          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}-${{ hashFiles('**/Cargo.toml') }}
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-builder
         with:
           rust-version: ${{ matrix.rust }}
-      - name: Build workspace in debug mode
-        run: |
-          cargo build
-        env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target/debug"
       - name: Build workspace in release mode
         run: |
-          cargo check --release
-        env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target/release"
-
-  # test the crate
-  linux-test:
-    name: Test Workspace on AMD64 Rust ${{ matrix.rust }}
-    needs: [linux-build-lib]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64]
-        rust: [stable]
-    container:
-      image: ${{ matrix.arch }}/rust
-      env:
-        # Disable full debug symbol generation to speed up CI build and keep memory down
-        # "1" means line tables only, which is useful for panic tracebacks.
-        RUSTFLAGS: "-C debuginfo=1"
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Install protobuf compiler
-        shell: bash
-        run: |
-          mkdir -p $HOME/d/protoc
-          cd $HOME/d/protoc
-          export PROTO_ZIP="protoc-21.4-linux-x86_64.zip"
-          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
-          unzip $PROTO_ZIP
-          export PATH=$PATH:$HOME/d/protoc/bin
-          protoc --version
-      - name: Cache Cargo
-        uses: actions/cache@v2
-        with:
-          path: /github/home/.cargo
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: cargo-cache-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v2
-        with:
-          path: /github/home/target
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-builder
-        with:
-          rust-version: ${{ matrix.rust }}
-      - name: Run tests
-        run: |
-          export PATH=$PATH:$HOME/d/protoc/bin
-          export ARROW_TEST_DATA=$(pwd)/testing/data
-          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
-          cargo test --features flight-sql
-          cd examples
-          cargo run --example standalone_sql --features=ballista/standalone
+          cargo build --release
+          ls -l /github/home/target/release
         env:
           CARGO_HOME: "/github/home/.cargo"
           CARGO_TARGET_DIR: "/github/home/target"
+      - name: Save artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: rust-artifacts
+          path: |
+            /github/home/target/release/ballista-scheduler
+            /github/home/target/release/ballista-executor
+            
+  react-build:
+    name: React build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y nodejs npm
+          npm install -g yarn
+      - name: Run yarn build
+        run: |
+          cd ballista/scheduler/ui
+          pwd
+          yarn install
+          yarn build
+      - name: Save artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: react-artifacts
+          path: |
+            ballista/scheduler/ui/build
+
+# test the crate
+#  linux-test:
+#    name: Test Workspace on AMD64 Rust ${{ matrix.rust }}
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        arch: [amd64]
+#        rust: [stable]
+#    container:
+#      image: ${{ matrix.arch }}/rust
+#      env:
+#        # Disable full debug symbol generation to speed up CI build and keep memory down
+#        # "1" means line tables only, which is useful for panic tracebacks.
+#        RUSTFLAGS: "-C debuginfo=1"
+#    steps:
+#      - uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#      - name: Install protobuf compiler
+#        shell: bash
+#        run: |
+#          mkdir -p $HOME/d/protoc
+#          cd $HOME/d/protoc
+#          export PROTO_ZIP="protoc-21.4-linux-x86_64.zip"
+#          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
+#          unzip $PROTO_ZIP
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          protoc --version
+#      - name: Cache Cargo
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/.cargo
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: cargo-cache-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Cache Rust dependencies
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/target
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Setup Rust toolchain
+#        uses: ./.github/actions/setup-builder
+#        with:
+#          rust-version: ${{ matrix.rust }}
+#      - name: Run tests
+#        run: |
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          export ARROW_TEST_DATA=$(pwd)/testing/data
+#          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
+#          cargo test
+#          cd examples
+#          cargo run --example standalone_sql --features=ballista/standalone
+#        env:
+#          CARGO_HOME: "/github/home/.cargo"
+#          CARGO_TARGET_DIR: "/github/home/target"
 
   # run ballista tests
-  ballista-test:
-    name: Test Ballista on AMD64 Rust ${{ matrix.rust }}
-    needs: [linux-build-lib]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64]
-        rust: [stable]
-    container:
-      image: ${{ matrix.arch }}/rust
-      env:
-        # Disable full debug symbol generation to speed up CI build and keep memory down
-        # "1" means line tables only, which is useful for panic tracebacks.
-        RUSTFLAGS: "-C debuginfo=1"
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Install protobuf compiler
-        shell: bash
-        run: |
-          mkdir -p $HOME/d/protoc
-          cd $HOME/d/protoc
-          export PROTO_ZIP="protoc-21.4-linux-x86_64.zip"
-          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
-          unzip $PROTO_ZIP
-          export PATH=$PATH:$HOME/d/protoc/bin
-          protoc --version
-      - name: Cache Cargo
-        uses: actions/cache@v2
-        with:
-          path: /github/home/.cargo
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: cargo-cache-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v2
-        with:
-          path: /github/home/target
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-builder
-        with:
-          rust-version: ${{ matrix.rust }}
-      # Ballista is currently not part of the main workspace so requires a separate test step
-      - name: Run Ballista tests
-        run: |
-          export PATH=$PATH:$HOME/d/protoc/bin
-          export ARROW_TEST_DATA=$(pwd)/testing/data
-          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
-          cd ballista
-          # snmalloc requires cmake so build without default features
-          cargo test --no-default-features --features sled
-          # Ensure also compiles in standalone mode
-          cargo test --no-default-features --features standalone
-        env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target"
+#  ballista-test:
+#    name: Test Ballista on AMD64 Rust ${{ matrix.rust }}
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        arch: [amd64]
+#        rust: [stable]
+#    container:
+#      image: ${{ matrix.arch }}/rust
+#      env:
+#        # Disable full debug symbol generation to speed up CI build and keep memory down
+#        # "1" means line tables only, which is useful for panic tracebacks.
+#        RUSTFLAGS: "-C debuginfo=1"
+#    steps:
+#      - uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#      - name: Install protobuf compiler
+#        shell: bash
+#        run: |
+#          mkdir -p $HOME/d/protoc
+#          cd $HOME/d/protoc
+#          export PROTO_ZIP="protoc-21.4-linux-x86_64.zip"
+#          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
+#          unzip $PROTO_ZIP
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          protoc --version
+#      - name: Cache Cargo
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/.cargo
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: cargo-cache-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Cache Rust dependencies
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/target
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Setup Rust toolchain
+#        uses: ./.github/actions/setup-builder
+#        with:
+#          rust-version: ${{ matrix.rust }}
+#      # Ballista is currently not part of the main workspace so requires a separate test step
+#      - name: Run Ballista tests
+#        run: |
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          export ARROW_TEST_DATA=$(pwd)/testing/data
+#          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
+#          cd ballista
+#          # snmalloc requires cmake so build without default features
+#          cargo test --no-default-features --features sled
+#          # Ensure also compiles in standalone mode
+#          cargo test --no-default-features --features standalone
+#        env:
+#          CARGO_HOME: "/github/home/.cargo"
+#          CARGO_TARGET_DIR: "/github/home/target"
 
-  windows-and-macos:
-    name: Test on ${{ matrix.os }} Rust ${{ matrix.rust }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest]
-        rust: [stable]
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Install protobuf macos compiler
-        shell: bash
-        run: |
-          mkdir -p $HOME/d/protoc
-          cd $HOME/d/protoc
-          export PROTO_ZIP="protoc-21.4-osx-x86_64.zip"
-          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
-          unzip $PROTO_ZIP
-          echo "$HOME/d/protoc/bin" >> $GITHUB_PATH
-          export PATH=$PATH:$HOME/d/protoc/bin
-          protoc --version
-        if: ${{matrix.os == 'macos-latest'}}
-      - name: Install protobuf windows compiler
-        shell: bash
-        run: |
-          mkdir -p $HOME/d/protoc
-          cd $HOME/d/protoc
-          export PROTO_ZIP="protoc-21.4-win64.zip"
-          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
-          unzip $PROTO_ZIP
-          export PATH=$PATH:$HOME/d/protoc/bin
-          protoc.exe --version
-        if: ${{matrix.os == 'windows-latest'}}
-      # TODO: this won't cache anything, which is expensive. Setup this action
-      # with a OS-dependent path.
-      - name: Setup Rust toolchain
-        run: |
-          rustup toolchain install ${{ matrix.rust }}
-          rustup default ${{ matrix.rust }}
-          rustup component add rustfmt
-      - name: Run tests
-        shell: bash
-        run: |
-          export PATH=$PATH:$HOME/d/protoc/bin
-          export ARROW_TEST_DATA=$(pwd)/testing/data
-          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
-          cargo test
-        env:
-          # do not produce debug symbols to keep memory usage down
-          RUSTFLAGS: "-C debuginfo=0"
+#  windows-and-macos:
+#    name: Test on ${{ matrix.os }} Rust ${{ matrix.rust }}
+#    runs-on: ${{ matrix.os }}
+#    strategy:
+#      matrix:
+#        os: [windows-latest, macos-latest]
+#        rust: [stable]
+#    steps:
+#      - uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#      - name: Install protobuf macos compiler
+#        shell: bash
+#        run: |
+#          mkdir -p $HOME/d/protoc
+#          cd $HOME/d/protoc
+#          export PROTO_ZIP="protoc-21.4-osx-x86_64.zip"
+#          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
+#          unzip $PROTO_ZIP
+#          echo "$HOME/d/protoc/bin" >> $GITHUB_PATH
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          protoc --version
+#        if: ${{matrix.os == 'macos-latest'}}
+#      - name: Install protobuf windows compiler
+#        shell: bash
+#        run: |
+#          mkdir -p $HOME/d/protoc
+#          cd $HOME/d/protoc
+#          export PROTO_ZIP="protoc-21.4-win64.zip"
+#          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.4/$PROTO_ZIP
+#          unzip $PROTO_ZIP
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          protoc.exe --version
+#        if: ${{matrix.os == 'windows-latest'}}
+#      # TODO: this won't cache anything, which is expensive. Setup this action
+#      # with a OS-dependent path.
+#      - name: Setup Rust toolchain
+#        run: |
+#          rustup toolchain install ${{ matrix.rust }}
+#          rustup default ${{ matrix.rust }}
+#          rustup component add rustfmt
+#      - name: Run tests
+#        shell: bash
+#        run: |
+#          export PATH=$PATH:$HOME/d/protoc/bin
+#          export ARROW_TEST_DATA=$(pwd)/testing/data
+#          export PARQUET_TEST_DATA=$(pwd)/parquet-testing/data
+#          cargo test
+#        env:
+#          # do not produce debug symbols to keep memory usage down
+#          RUSTFLAGS: "-C debuginfo=0"
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    container:
-      image: amd64/rust
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup toolchain
-        run: |
-          rustup toolchain install stable
-          rustup default stable
-          rustup component add rustfmt
-      - name: Run
-        run: ci/scripts/rust_fmt.sh
-        env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target"
+#  lint:
+#    name: Lint
+#    runs-on: ubuntu-latest
+#    container:
+#      image: amd64/rust
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Setup toolchain
+#        run: |
+#          rustup toolchain install stable
+#          rustup default stable
+#          rustup component add rustfmt
+#      - name: Run
+#        run: ci/scripts/rust_fmt.sh
+#        env:
+#          CARGO_HOME: "/github/home/.cargo"
+#          CARGO_TARGET_DIR: "/github/home/target"
 
-  clippy:
-    name: Clippy
-    needs: [linux-build-lib]
+  docker:
+    name: Docker
+    needs: [linux-build-lib, react-build]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64]
-        rust: [stable]
-    container:
-      image: ${{ matrix.arch }}/rust
-      env:
-        # Disable full debug symbol generation to speed up CI build and keep memory down
-        # "1" means line tables only, which is useful for panic tracebacks.
-        RUSTFLAGS: "-C debuginfo=1"
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v3
+      - name: Restore rust artifacts
+        uses: actions/download-artifact@v2
         with:
-          submodules: true
-      - name: Cache Cargo
-        uses: actions/cache@v2
+          name: rust-artifacts
+          path: /home/runner/work/arrow-ballista/arrow-ballista/target/release
+      - name: Restore react artifacts
+        uses: actions/download-artifact@v2
         with:
-          path: /github/home/.cargo
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: cargo-cache-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v2
-        with:
-          path: /github/home/target
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-builder
-        with:
-          rust-version: ${{ matrix.rust }}
-      - name: Install Clippy
+          name: react-artifacts
+          path: /home/runner/work/arrow-ballista/arrow-ballista/ballista/scheduler/ui/build
+      - name: Build and push Docker image
         run: |
-          rustup component add clippy
-      - name: Run clippy
-        run: ci/scripts/rust_clippy.sh
+          echo "github user is $DOCKER_USER"
+          pwd
+          mkdir -p trip-data
+          wget https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2022-01.parquet -P trip-data 
+          export DOCKER_TAG="$(git describe --exact-match --tags $(git log -n1 --pretty='%h') || echo '')"
+          if [[ $DOCKER_TAG =~ ^[0-9\.]+$ ]]
+          then
+            echo "publishing docker tag $DOCKER_TAG"
+          fi
+          docker login ghcr.io -u $DOCKER_USER -p "$DOCKER_PASS"
+          docker build -t ghcr.io/apache/ballista-standalone:$DOCKER_TAG -f dev/docker/ballista-standalone.Dockerfile .
+          docker push ghcr.io/apache/ballista-standalone:$DOCKER_TAG
         env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target"
+          DOCKER_USER: ${{ github.actor }}
+          DOCKER_PASS: ${{ secrets.GITHUB_TOKEN }}
 
-  cargo-toml-formatting-checks:
-    name: Check Cargo.toml formatting
-    needs: [linux-build-lib]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64]
-        rust: [stable]
-    container:
-      image: ${{ matrix.arch }}/rust
-      env:
-        # Disable full debug symbol generation to speed up CI build and keep memory down
-        # "1" means line tables only, which is useful for panic tracebacks.
-        RUSTFLAGS: "-C debuginfo=1"
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Cache Cargo
-        uses: actions/cache@v2
-        with:
-          path: /github/home/.cargo
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: cargo-cache-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v2
-        with:
-          path: /github/home/target
-          # this key equals the ones on `linux-build-lib` for re-use
-          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-builder
-        with:
-          rust-version: ${{ matrix.rust }}
-      - name: Install cargo-tomlfmt
-        run: |
-          which cargo-tomlfmt || cargo install cargo-tomlfmt
-        env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target"
-      - name: Check Cargo.toml formatting
-        run: |
-          # if you encounter error, try rerun the command below, finally run 'git diff' to
-          # check which Cargo.toml introduces formatting violation
-          #
-          # ignore ./Cargo.toml because putting workspaces in multi-line lists make it easy to read
-          ci/scripts/rust_toml_fmt.sh
-          git diff --exit-code
-        env:
-          CARGO_HOME: "/github/home/.cargo"
-          CARGO_TARGET_DIR: "/github/home/target"
+#  clippy:
+#    name: Clippy
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        arch: [amd64]
+#        rust: [stable]
+#    container:
+#      image: ${{ matrix.arch }}/rust
+#      env:
+#        # Disable full debug symbol generation to speed up CI build and keep memory down
+#        # "1" means line tables only, which is useful for panic tracebacks.
+#        RUSTFLAGS: "-C debuginfo=1"
+#    steps:
+#      - uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#      - name: Cache Cargo
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/.cargo
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: cargo-cache-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Cache Rust dependencies
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/target
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Setup Rust toolchain
+#        uses: ./.github/actions/setup-builder
+#        with:
+#          rust-version: ${{ matrix.rust }}
+#      - name: Install Clippy
+#        run: |
+#          rustup component add clippy
+#      - name: Run clippy
+#        run: ci/scripts/rust_clippy.sh
+#        env:
+#          CARGO_HOME: "/github/home/.cargo"
+#          CARGO_TARGET_DIR: "/github/home/target"
+
+#  cargo-toml-formatting-checks:
+#    name: Check Cargo.toml formatting
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        arch: [amd64]
+#        rust: [stable]
+#    container:
+#      image: ${{ matrix.arch }}/rust
+#      env:
+#        # Disable full debug symbol generation to speed up CI build and keep memory down
+#        # "1" means line tables only, which is useful for panic tracebacks.
+#        RUSTFLAGS: "-C debuginfo=1"
+#    steps:
+#      - uses: actions/checkout@v3
+#        with:
+#          submodules: true
+#      - name: Cache Cargo
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/.cargo
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: cargo-cache-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Cache Rust dependencies
+#        uses: actions/cache@v2
+#        with:
+#          path: /github/home/target
+#          # this key equals the ones on `linux-build-lib` for re-use
+#          key: ${{ runner.os }}-${{ matrix.arch }}-target-cache-${{ matrix.rust }}-${{ hashFiles('**/Cargo.toml') }}
+#      - name: Setup Rust toolchain
+#        uses: ./.github/actions/setup-builder
+#        with:
+#          rust-version: ${{ matrix.rust }}
+#      - name: Install cargo-tomlfmt
+#        run: |
+#          which cargo-tomlfmt || cargo install cargo-tomlfmt
+#        env:
+#          CARGO_HOME: "/github/home/.cargo"
+#          CARGO_TARGET_DIR: "/github/home/target"
+#      - name: Check Cargo.toml formatting
+#        run: |
+#          # if you encounter error, try rerun the command below, finally run 'git diff' to
+#          # check which Cargo.toml introduces formatting violation
+#          #
+#          # ignore ./Cargo.toml because putting workspaces in multi-line lists make it easy to read
+#          ci/scripts/rust_toml_fmt.sh
+#          git diff --exit-code
+#        env:
+#          CARGO_HOME: "/github/home/.cargo"
+#          CARGO_TARGET_DIR: "/github/home/target"
 
 # Coverage job was failing. https://github.com/apache/arrow-datafusion/issues/590 tracks re-instating it
 

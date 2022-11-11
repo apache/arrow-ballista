@@ -30,7 +30,7 @@ edition = "2018"
 scheduler = "scheduler_config_spec.toml"
 
 [features]
-default = ["etcd", "sled"]
+default = ["etcd", "sled", "flight-sql"]
 etcd = ["etcd-client"]
 flight-sql = []
 sled = ["sled_package", "tokio-stream"]
