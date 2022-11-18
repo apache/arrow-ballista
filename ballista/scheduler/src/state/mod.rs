@@ -25,7 +25,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
-use crate::scheduler_server::SessionBuilder;
 use crate::state::backend::{Lock, StateBackendClient};
 use crate::state::executor_manager::{ExecutorManager, ExecutorReservation};
 use crate::state::session_manager::SessionManager;
@@ -36,6 +35,7 @@ use crate::state::execution_graph::TaskDescription;
 use ballista_core::error::{BallistaError, Result};
 use ballista_core::serde::protobuf::TaskStatus;
 use ballista_core::serde::{AsExecutionPlan, BallistaCodec};
+use ballista_core::utils::SessionBuilder;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::physical_plan::display::DisplayableExecutionPlan;
 use datafusion::prelude::SessionContext;
@@ -99,7 +99,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
     #[cfg(test)]
     pub fn new_with_default_scheduler_name(
         config_client: Arc<dyn StateBackendClient>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         codec: BallistaCodec<T, U>,
     ) -> Self {
         SchedulerState::new(
@@ -113,7 +113,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
 
     pub fn new(
         config_client: Arc<dyn StateBackendClient>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         codec: BallistaCodec<T, U>,
         scheduler_name: String,
         config: SchedulerConfig,
@@ -125,7 +125,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
             ),
             task_manager: TaskManager::new(
                 config_client.clone(),
-                session_builder,
+                session_builder.clone(),
                 codec.clone(),
                 scheduler_name,
             ),
@@ -138,7 +138,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
     #[allow(dead_code)]
     pub(crate) fn with_task_launcher(
         config_client: Arc<dyn StateBackendClient>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         codec: BallistaCodec<T, U>,
         scheduler_name: String,
         config: SchedulerConfig,
@@ -151,7 +151,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
             ),
             task_manager: TaskManager::with_launcher(
                 config_client.clone(),
-                session_builder,
+                session_builder.clone(),
                 codec.clone(),
                 scheduler_name,
                 dispatcher,
@@ -439,10 +439,10 @@ mod test {
         ExecutorData, ExecutorMetadata, ExecutorSpecification,
     };
     use ballista_core::serde::BallistaCodec;
-    use ballista_core::utils::default_session_builder;
 
     use crate::config::SchedulerConfig;
     use crate::test_utils::BlackholeTaskLauncher;
+    use ballista_core::utils::DefaultSessionBuilder;
     use datafusion::arrow::datatypes::{DataType, Field, Schema};
     use datafusion::logical_expr::{col, sum};
     use datafusion::physical_plan::ExecutionPlan;
@@ -458,7 +458,7 @@ mod test {
         let state: Arc<SchedulerState<LogicalPlanNode, PhysicalPlanNode>> =
             Arc::new(SchedulerState::new_with_default_scheduler_name(
                 state_storage,
-                default_session_builder,
+                Arc::new(DefaultSessionBuilder {}),
                 BallistaCodec::default(),
             ));
 
@@ -494,7 +494,7 @@ mod test {
         let state: Arc<SchedulerState<LogicalPlanNode, PhysicalPlanNode>> =
             Arc::new(SchedulerState::with_task_launcher(
                 state_storage,
-                default_session_builder,
+                Arc::new(DefaultSessionBuilder {}),
                 BallistaCodec::default(),
                 String::default(),
                 SchedulerConfig::default(),
@@ -579,7 +579,7 @@ mod test {
         let state: Arc<SchedulerState<LogicalPlanNode, PhysicalPlanNode>> =
             Arc::new(SchedulerState::with_task_launcher(
                 state_storage,
-                default_session_builder,
+                Arc::new(DefaultSessionBuilder {}),
                 BallistaCodec::default(),
                 String::default(),
                 SchedulerConfig::default(),

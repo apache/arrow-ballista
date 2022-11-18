@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
         .set("ballista.shuffle.partitions", "1")
         .build()?;
 
-    let ctx = BallistaContext::standalone(&config, 2).await?;
+    let ctx = BallistaContext::standalone(&config, 2, None).await?;
 
     // register csv file with the execution context
     ctx.register_csv(

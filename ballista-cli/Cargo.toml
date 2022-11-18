@@ -29,12 +29,12 @@ rust-version = "1.59"
 readme = "README.md"
 
 [dependencies]
-ballista = { path = "../ballista/client", version = "0.9.0", features = [
-    "standalone",
-] }
+ballista = { path = "../ballista/client", version = "0.9.0", features = ["standalone"] }
+ballista-core = { path = "../ballista/core", version = "0.9.0" }
 clap = { version = "3", features = ["derive", "cargo"] }
-datafusion = "14.0.0"
-datafusion-cli = "14.0.0"
+dashmap = "5.4.0"
+datafusion = { git = "https://github.com/apache/arrow-datafusion.git", rev = "7b5842b91ebd00a2c7f894fcad797bea68a56d0f" }
+datafusion-cli = { git = "https://github.com/apache/arrow-datafusion.git", rev = "7b5842b91ebd00a2c7f894fcad797bea68a56d0f" }
 dirs = "4.0.0"
 env_logger = "0.9"
 mimalloc = { version = "0.1", default-features = false }

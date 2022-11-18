@@ -51,6 +51,7 @@ use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::CsvReadOptions;
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
+use ballista_core::utils::DefaultSessionBuilder;
 use datafusion_proto::protobuf::LogicalPlanNode;
 use parking_lot::Mutex;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -417,6 +418,7 @@ impl SchedulerTest {
                 "localhost:50050".to_owned(),
                 state_storage.clone(),
                 BallistaCodec::default(),
+                Arc::new(DefaultSessionBuilder {}),
                 config,
                 metrics_collector,
                 Arc::new(launcher),

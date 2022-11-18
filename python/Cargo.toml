@@ -36,7 +36,7 @@ default = ["mimalloc"]
 [dependencies]
 async-trait = "0.1"
 ballista = { path = "../ballista/client", version = "0.9.0" }
-datafusion = { version = "14.0.0", features = ["pyarrow"] }
+datafusion = { git = "https://github.com/apache/arrow-datafusion.git", rev = "7b5842b91ebd00a2c7f894fcad797bea68a56d0f", features = ["pyarrow"] }
 futures = "0.3"
 mimalloc = { version = "*", optional = true, default-features = false }
 pyo3 = { version = "~0.17.1", features = ["extension-module", "abi3", "abi3-py37"] }

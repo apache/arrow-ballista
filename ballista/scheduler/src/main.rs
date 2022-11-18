@@ -21,6 +21,7 @@ use anyhow::{Context, Result};
 #[cfg(feature = "flight-sql")]
 use arrow_flight::flight_service_server::FlightServiceServer;
 use ballista_scheduler::scheduler_server::externalscaler::external_scaler_server::ExternalScalerServer;
+use dashmap::DashMap;
 use futures::future::{self, Either, TryFutureExt};
 use hyper::{server::conn::AddrStream, service::make_service_fn, Server};
 use std::convert::Infallible;
@@ -60,7 +61,7 @@ mod config {
     ));
 }
 
-use ballista_core::utils::create_grpc_server;
+use ballista_core::utils::{create_grpc_server, TableProviderSessionBuilder};
 
 use ballista_core::config::LogRotationPolicy;
 use ballista_scheduler::config::SchedulerConfig;
@@ -86,6 +87,8 @@ async fn start_server(
         config.scheduling_policy
     );
 
+    let session_builder = TableProviderSessionBuilder::new(DashMap::new());
+
     let metrics_collector = default_metrics_collector()?;
 
     let mut scheduler_server: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
@@ -93,6 +96,7 @@ async fn start_server(
             scheduler_name,
             config_backend.clone(),
             BallistaCodec::default(),
+            Arc::new(session_builder),
             config,
             metrics_collector,
         );

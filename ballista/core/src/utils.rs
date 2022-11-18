@@ -22,8 +22,12 @@ use crate::execution_plans::{
 };
 use crate::serde::scheduler::PartitionStats;
 use async_trait::async_trait;
+use dashmap::DashMap;
 use datafusion::arrow::datatypes::Schema;
 use datafusion::arrow::{ipc::writer::FileWriter, record_batch::RecordBatch};
+use datafusion::datasource::datasource::TableProviderFactory;
+use datafusion::datasource::file_format::file_type::FileType;
+use datafusion::datasource::listing_table_factory::ListingTableFactory;
 use datafusion::datasource::object_store::{ObjectStoreProvider, ObjectStoreRegistry};
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::{
@@ -53,7 +57,9 @@ use log::error;
 #[cfg(feature = "s3")]
 use object_store::aws::AmazonS3Builder;
 use object_store::ObjectStore;
+use std::collections::HashMap;
 use std::io::{BufWriter, Write};
+use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -63,15 +69,64 @@ use tonic::codegen::StdError;
 use tonic::transport::{Channel, Error, Server};
 use url::Url;
 
+pub trait SessionBuilder: Send + Sync {
+    fn build(&self, config: SessionConfig) -> crate::error::Result<SessionState>;
+}
+
 /// Default session builder using the provided configuration
-pub fn default_session_builder(config: SessionConfig) -> SessionState {
-    SessionState::with_config_rt(
-        config,
-        Arc::new(
-            RuntimeEnv::new(with_object_store_provider(RuntimeConfig::default()))
-                .unwrap(),
-        ),
-    )
+#[derive(Clone)]
+pub struct DefaultSessionBuilder {}
+
+impl SessionBuilder for DefaultSessionBuilder {
+    fn build(&self, config: SessionConfig) -> crate::error::Result<SessionState> {
+        let rt_cfg = with_object_store_provider(RuntimeConfig::default());
+        let state =
+            SessionState::with_config_rt(config, Arc::new(RuntimeEnv::new(rt_cfg)?));
+        Ok(state)
+    }
+}
+
+/// Session builder with custom table providers
+#[derive(Clone)]
+pub struct TableProviderSessionBuilder {
+    table_factories: DashMap<String, Arc<dyn TableProviderFactory>>,
+}
+
+impl TableProviderSessionBuilder {
+    pub fn new(table_factories: DashMap<String, Arc<dyn TableProviderFactory>>) -> Self {
+        Self { table_factories }
+    }
+}
+
+impl SessionBuilder for TableProviderSessionBuilder {
+    fn build(&self, config: SessionConfig) -> crate::error::Result<SessionState> {
+        let factories = self.table_factories.clone();
+
+        // Add defaults
+        factories.insert(
+            "csv".to_string(),
+            Arc::new(ListingTableFactory::new(FileType::CSV)),
+        );
+        factories.insert(
+            "parquet".to_string(),
+            Arc::new(ListingTableFactory::new(FileType::PARQUET)),
+        );
+        factories.insert(
+            "avro".to_string(),
+            Arc::new(ListingTableFactory::new(FileType::AVRO)),
+        );
+        factories.insert(
+            "json".to_string(),
+            Arc::new(ListingTableFactory::new(FileType::JSON)),
+        );
+        let factories = HashMap::from_iter(factories.into_iter());
+
+        let rt_cfg = RuntimeConfig::default().with_table_factories(factories);
+        let rt_cfg = with_object_store_provider(rt_cfg);
+        let state =
+            SessionState::with_config_rt(config, Arc::new(RuntimeEnv::new(rt_cfg)?));
+        Ok(state)
+    }
 }
 
 /// Get a RuntimeConfig with specific ObjectStoreDetector in the ObjectStoreRegistry
@@ -287,21 +342,19 @@ pub fn create_df_ctx_with_ballista_query_planner<T: 'static + AsLogicalPlan>(
     scheduler_url: String,
     session_id: String,
     config: &BallistaConfig,
+    table_factories: HashMap<String, Arc<dyn TableProviderFactory>>,
 ) -> SessionContext {
-    let planner: Arc<BallistaQueryPlanner<T>> =
-        Arc::new(BallistaQueryPlanner::new(scheduler_url, config.clone()));
+    let planner: BallistaQueryPlanner<T> =
+        BallistaQueryPlanner::new(scheduler_url, config.clone());
 
     let session_config = SessionConfig::new()
         .with_target_partitions(config.default_shuffle_partitions())
         .with_information_schema(true);
-    let mut session_state = SessionState::with_config_rt(
-        session_config,
-        Arc::new(
-            RuntimeEnv::new(with_object_store_provider(RuntimeConfig::default()))
-                .unwrap(),
-        ),
-    )
-    .with_query_planner(planner);
+    let cfg = RuntimeConfig::new().with_table_factories(table_factories);
+    let cfg = with_object_store_provider(cfg);
+    let env = RuntimeEnv::new(cfg).unwrap();
+    let mut session_state = SessionState::with_config_rt(session_config, Arc::new(env))
+        .with_query_planner(Arc::new(planner));
     session_state.session_id = session_id;
     // the SessionContext created here is the client side context, but the session_id is from server side.
     SessionContext::with_state(session_state)

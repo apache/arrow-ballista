@@ -124,6 +124,7 @@ impl BallistaContext {
                 scheduler_url,
                 remote_session_id,
                 state.config(),
+                HashMap::new(),
             )
         };
 
@@ -137,13 +138,18 @@ impl BallistaContext {
     pub async fn standalone(
         config: &BallistaConfig,
         concurrent_tasks: usize,
+        session_builder: Option<Arc<dyn ballista_core::utils::SessionBuilder>>,
     ) -> ballista_core::error::Result<Self> {
         use ballista_core::serde::protobuf::PhysicalPlanNode;
         use ballista_core::serde::BallistaCodec;
+        use ballista_core::utils::DefaultSessionBuilder;
+        use ballista_scheduler::standalone::new_standalone_scheduler;
 
         log::info!("Running in local mode. Scheduler will be run in-proc");
 
-        let addr = ballista_scheduler::standalone::new_standalone_scheduler().await?;
+        let session_builder =
+            session_builder.unwrap_or_else(|| Arc::new(DefaultSessionBuilder {}));
+        let addr = new_standalone_scheduler(session_builder.clone()).await?;
         let scheduler_url = format!("http://localhost:{}", addr.port());
         let mut scheduler = loop {
             match SchedulerGrpcClient::connect(scheduler_url.clone()).await {
@@ -183,6 +189,7 @@ impl BallistaContext {
                 scheduler_url,
                 remote_session_id,
                 config,
+                HashMap::new(),
             )
         };
 
@@ -438,9 +445,10 @@ mod tests {
     #[cfg(feature = "standalone")]
     async fn test_standalone_mode() {
         use super::*;
-        let context = BallistaContext::standalone(&BallistaConfig::new().unwrap(), 1)
-            .await
-            .unwrap();
+        let context =
+            BallistaContext::standalone(&BallistaConfig::new().unwrap(), 1, None)
+                .await
+                .unwrap();
         let df = context.sql("SELECT 1;").await.unwrap();
         df.collect().await.unwrap();
     }
@@ -452,9 +460,10 @@ mod tests {
         use std::fs::File;
         use std::io::Write;
         use tempfile::TempDir;
-        let context = BallistaContext::standalone(&BallistaConfig::new().unwrap(), 1)
-            .await
-            .unwrap();
+        let context =
+            BallistaContext::standalone(&BallistaConfig::new().unwrap(), 1, None)
+                .await
+                .unwrap();
 
         let data = "Jorge,2018-12-13T12:12:10.011Z\n\
                     Andrew,2018-11-13T17:11:10.011Z";
@@ -498,11 +507,12 @@ mod tests {
         use std::fs::File;
         use std::io::Write;
         use tempfile::TempDir;
+
         let config = BallistaConfigBuilder::default()
             .set(BALLISTA_WITH_INFORMATION_SCHEMA, "true")
             .build()
             .unwrap();
-        let context = BallistaContext::standalone(&config, 1).await.unwrap();
+        let context = BallistaContext::standalone(&config, 1, None).await.unwrap();
 
         let data = "Jorge,2018-12-13T12:12:10.011Z\n\
                     Andrew,2018-11-13T17:11:10.011Z";
@@ -550,11 +560,12 @@ mod tests {
         use ballista_core::config::{
             BallistaConfigBuilder, BALLISTA_WITH_INFORMATION_SCHEMA,
         };
+
         let config = BallistaConfigBuilder::default()
             .set(BALLISTA_WITH_INFORMATION_SCHEMA, "true")
             .build()
             .unwrap();
-        let context = BallistaContext::standalone(&config, 1).await.unwrap();
+        let context = BallistaContext::standalone(&config, 1, None).await.unwrap();
 
         context
             .register_parquet(
@@ -623,7 +634,7 @@ mod tests {
             .set(BALLISTA_WITH_INFORMATION_SCHEMA, "true")
             .build()
             .unwrap();
-        let context = BallistaContext::standalone(&config, 1).await.unwrap();
+        let context = BallistaContext::standalone(&config, 1, None).await.unwrap();
 
         let sql = "select EXTRACT(year FROM to_timestamp('2020-09-08T12:13:14+00:00'));";
 
@@ -639,11 +650,12 @@ mod tests {
             BallistaConfigBuilder, BALLISTA_WITH_INFORMATION_SCHEMA,
         };
         use datafusion::arrow::util::pretty::pretty_format_batches;
+
         let config = BallistaConfigBuilder::default()
             .set(BALLISTA_WITH_INFORMATION_SCHEMA, "true")
             .build()
             .unwrap();
-        let context = BallistaContext::standalone(&config, 1).await.unwrap();
+        let context = BallistaContext::standalone(&config, 1, None).await.unwrap();
 
         let df = context
             .sql("SELECT 1 as NUMBER union SELECT 1 as NUMBER;")
@@ -705,7 +717,7 @@ mod tests {
             .set(BALLISTA_WITH_INFORMATION_SCHEMA, "true")
             .build()
             .unwrap();
-        let context = BallistaContext::standalone(&config, 1).await.unwrap();
+        let context = BallistaContext::standalone(&config, 1, None).await.unwrap();
 
         context
             .register_parquet(

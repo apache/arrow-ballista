@@ -16,7 +16,6 @@
 // under the License.
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
-use crate::scheduler_server::SessionBuilder;
 use crate::state::backend::{Keyspace, Operation, StateBackendClient};
 use crate::state::execution_graph::{
     ExecutionGraph, ExecutionStage, RunningTaskInfo, TaskDescription,
@@ -37,6 +36,7 @@ use ballista_core::serde::protobuf::{
 use ballista_core::serde::scheduler::to_proto::hash_partitioning_to_proto;
 use ballista_core::serde::scheduler::ExecutorMetadata;
 use ballista_core::serde::{AsExecutionPlan, BallistaCodec};
+use ballista_core::utils::SessionBuilder;
 use dashmap::DashMap;
 use datafusion::physical_plan::ExecutionPlan;
 use datafusion::prelude::SessionContext;
@@ -108,7 +108,7 @@ impl TaskLauncher for DefaultTaskLauncher {
 #[derive(Clone)]
 pub struct TaskManager<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> {
     state: Arc<dyn StateBackendClient>,
-    session_builder: SessionBuilder,
+    session_builder: Arc<dyn SessionBuilder>,
     codec: BallistaCodec<T, U>,
     scheduler_id: String,
     // Cache for active jobs curated by this scheduler
@@ -145,7 +145,7 @@ pub struct UpdatedStages {
 impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> TaskManager<T, U> {
     pub fn new(
         state: Arc<dyn StateBackendClient>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         codec: BallistaCodec<T, U>,
         scheduler_id: String,
     ) -> Self {
@@ -162,7 +162,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> TaskManager<T, U>
     #[allow(dead_code)]
     pub(crate) fn with_launcher(
         state: Arc<dyn StateBackendClient>,
-        session_builder: SessionBuilder,
+        session_builder: Arc<dyn SessionBuilder>,
         codec: BallistaCodec<T, U>,
         scheduler_id: String,
         launcher: Arc<dyn TaskLauncher>,
@@ -784,7 +784,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> TaskManager<T, U>
         }
         let config = config_builder.build()?;
 
-        Ok(create_datafusion_context(&config, self.session_builder))
+        create_datafusion_context(&config, self.session_builder.as_ref())
     }
 
     async fn decode_execution_graph(&self, value: Vec<u8>) -> Result<ExecutionGraph> {

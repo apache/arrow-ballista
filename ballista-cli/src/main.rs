@@ -126,7 +126,7 @@ pub async fn main() -> Result<()> {
                 num_cpus::get()
             };
             // In-process execution with Ballista Standalone
-            BallistaContext::standalone(&ballista_config, concurrent_tasks).await?
+            BallistaContext::standalone(&ballista_config, concurrent_tasks, None).await?
         }
     };
 

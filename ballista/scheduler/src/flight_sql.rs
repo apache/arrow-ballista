@@ -31,7 +31,11 @@ use arrow_flight::{
     HandshakeResponse, Location, Ticket,
 };
 use log::{debug, error, warn};
+use std::borrow::Cow;
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::io::BufWriter;
+use std::iter::FromIterator;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::string::ToString;
@@ -54,22 +58,33 @@ use ballista_core::serde::protobuf::SuccessfulJob;
 use ballista_core::utils::create_grpc_client_connection;
 use dashmap::DashMap;
 use datafusion::arrow;
-use datafusion::arrow::array::{ArrayRef, StringArray};
-use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use datafusion::arrow::array::{
+    Array, ArrayRef, BinaryArray, BooleanArray, Int32Array, Int64Array, ListArray,
+    ListBuilder, StringArray, StringBuilder, StructArray, UInt32Array, UInt8Array,
+    UnionArray,
+};
+use datafusion::arrow::buffer::Buffer;
+use datafusion::arrow::datatypes::{
+    DataType, Field, Int32Type, Schema, SchemaRef, UnionMode,
+};
 use datafusion::arrow::error::ArrowError;
-use datafusion::arrow::ipc::writer::{IpcDataGenerator, IpcWriteOptions};
+use datafusion::arrow::ipc::writer::{write_message, IpcDataGenerator, IpcWriteOptions};
 use datafusion::arrow::record_batch::RecordBatch;
+use datafusion::catalog::listing_schema::ListingSchemaProvider;
 use datafusion::common::DFSchemaRef;
+use datafusion::error::DataFusionError;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::physical_plan::common::batch_byte_size;
 use datafusion::prelude::SessionContext;
 use datafusion_proto::protobuf::LogicalPlanNode;
+use itertools::Itertools;
 use prost::Message;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::codegen::futures_core::Stream;
 use tonic::metadata::MetadataValue;
+use url::form_urlencoded;
 use uuid::Uuid;
 
 pub struct FlightSqlServiceImpl {
@@ -89,26 +104,273 @@ impl FlightSqlServiceImpl {
         }
     }
 
-    fn tables(&self, ctx: Arc<SessionContext>) -> Result<RecordBatch, ArrowError> {
+    fn foreign_keys() -> Result<RecordBatch, ArrowError> {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("pk_catalog_name", DataType::Utf8, true),
+            Field::new("pk_db_schema_name", DataType::Utf8, true),
+            Field::new("pk_table_name", DataType::Utf8, false),
+            Field::new("pk_column_name", DataType::Utf8, false),
+            Field::new("fk_catalog_name", DataType::Utf8, true),
+            Field::new("fk_db_schema_name", DataType::Utf8, true),
+            Field::new("fk_table_name", DataType::Utf8, false),
+            Field::new("fk_column_name", DataType::Utf8, false),
+            Field::new("key_sequence", DataType::Int32, false),
+            Field::new("fk_key_name", DataType::Utf8, true),
+            Field::new("pk_key_name", DataType::Utf8, true),
+            Field::new("update_rule", DataType::UInt8, false),
+            Field::new("delete_rule", DataType::UInt8, false),
+        ]));
+        let cols = vec![
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(Int32Array::from(Vec::<i32>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(UInt8Array::from(Vec::<u8>::new())) as ArrayRef,
+            Arc::new(UInt8Array::from(Vec::<u8>::new())) as ArrayRef,
+        ];
+        RecordBatch::try_new(schema, cols)
+    }
+
+    fn primary_keys() -> Result<RecordBatch, ArrowError> {
         let schema = Arc::new(Schema::new(vec![
             Field::new("catalog_name", DataType::Utf8, true),
             Field::new("db_schema_name", DataType::Utf8, true),
             Field::new("table_name", DataType::Utf8, false),
-            Field::new("table_type", DataType::Utf8, false),
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("key_name", DataType::Utf8, true),
+            Field::new("key_sequence", DataType::Int32, false),
         ]));
-        let tables = ctx.tables()?;
-        let names: Vec<_> = tables.iter().map(|it| Some(it.as_str())).collect();
-        let types: Vec<_> = names.iter().map(|_| Some("TABLE")).collect();
-        let cats: Vec<_> = names.iter().map(|_| None).collect();
-        let schemas: Vec<_> = names.iter().map(|_| None).collect();
+        let cols = vec![
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(StringArray::from(Vec::<&str>::new())) as ArrayRef,
+            Arc::new(Int32Array::from(Vec::<i32>::new())) as ArrayRef,
+        ];
+        RecordBatch::try_new(schema, cols)
+    }
+
+    async fn tables(
+        &self,
+        ctx: Arc<SessionContext>,
+        catalog: &Option<String>,
+        schema_filter: &Option<String>,
+        table_filter: &Option<String>,
+        include_schema: bool,
+    ) -> Result<RecordBatch, ArrowError> {
+        let mut fields = vec![
+            Field::new("catalog_name", DataType::Utf8, true),
+            Field::new("db_schema_name", DataType::Utf8, true),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+        ];
+        if include_schema {
+            fields.push(Field::new("table_schema", DataType::Binary, false))
+        }
+        let schema = Arc::new(Schema::new(fields));
+        let mut cat_names = vec![];
+        let mut schema_names = vec![];
+        let mut table_names = vec![];
+        let mut schemas = vec![];
+        for cat_name in ctx.catalog_names().iter() {
+            if let Some(name) = catalog.as_ref() {
+                if name != cat_name {
+                    continue;
+                }
+            }
+            let cat_name = cat_name.as_str();
+            let cat = ctx
+                .catalog(cat_name)
+                .ok_or(DataFusionError::Internal("Catalog not found!".to_string()))?;
+            for schema_name in cat.schema_names() {
+                if let Some(schema_filter) = schema_filter {
+                    if schema_filter != "%" && *schema_filter != schema_name {
+                        continue;
+                    }
+                }
+                let schema = cat
+                    .schema(schema_name.as_str())
+                    .ok_or(DataFusionError::Internal("Schema not found!".to_string()))?;
+                let lister = schema
+                    .as_any()
+                    .downcast_ref::<ListingSchemaProvider>()
+                    .map(|it| it.clone());
+                if let Some(lister) = lister {
+                    lister.refresh(&ctx.state()).await?;
+                }
+                for table_name in schema.table_names() {
+                    if let Some(table_filter) = table_filter {
+                        if table_filter != "%" && *table_filter != table_name {
+                            continue;
+                        }
+                    }
+                    debug!(
+                        "advertising table {}.{}.{}",
+                        cat_name, schema_name, table_name
+                    );
+                    cat_names.push(cat_name.to_string());
+                    schema_names.push(schema_name.clone());
+                    table_names.push(table_name.clone());
+
+                    let table = schema.table(table_name.as_str()).ok_or(
+                        DataFusionError::Internal("Table not found!".to_string()),
+                    )?;
+                    let schema = table.schema();
+
+                    let mut bytes = vec![];
+                    let data_gen = IpcDataGenerator::default();
+                    let opts = IpcWriteOptions::default();
+                    {
+                        let mut writer = BufWriter::new(&mut bytes);
+                        let encoded_message =
+                            data_gen.schema_to_bytes(schema.as_ref(), &opts);
+                        write_message(&mut writer, encoded_message, &opts)?;
+                    }
+                    schemas.push(bytes);
+                }
+            }
+        }
+
+        let table_types: Vec<_> = table_names.iter().map(|_| Some("TABLE")).collect();
+        let mut cols = vec![
+            Arc::new(StringArray::from(cat_names)) as ArrayRef,
+            Arc::new(StringArray::from(schema_names)) as ArrayRef,
+            Arc::new(StringArray::from(table_names)) as ArrayRef,
+            Arc::new(StringArray::from(table_types)) as ArrayRef,
+        ];
+        if include_schema {
+            let bytes: Vec<&[u8]> = schemas.iter().map(|it| it.as_slice()).collect();
+            cols.push(Arc::new(BinaryArray::from(bytes)) as ArrayRef);
+        }
+        let rb = RecordBatch::try_new(schema, cols)?;
+        Ok(rb)
+    }
+
+    fn schemas(&self, ctx: Arc<SessionContext>) -> Result<RecordBatch, ArrowError> {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("catalog_name", DataType::Utf8, true),
+            Field::new("db_schema_name", DataType::Utf8, false),
+        ]));
+        let mut cats = vec![];
+        let mut schemas = vec![];
+        let cat_names = ctx.catalog_names().clone();
+        for cat_name in cat_names.iter() {
+            let cat_name = cat_name.as_str();
+            let cat = ctx
+                .catalog(cat_name)
+                .ok_or(DataFusionError::Internal("Catalog not found!".to_string()))?;
+            for schema_name in cat.schema_names() {
+                cats.push(cat_name);
+                schemas.push(schema_name);
+            }
+        }
+        let schemas: Vec<&str> = schemas.iter().map(|it| it.as_str()).collect();
         let rb = RecordBatch::try_new(
             schema,
-            [cats, schemas, names, types]
-                .into_iter()
+            [cats, schemas]
+                .iter()
                 .map(|i| Arc::new(StringArray::from(i.clone())) as ArrayRef)
                 .collect::<Vec<_>>(),
         )?;
         Ok(rb)
+    }
+
+    fn catalogs(&self, ctx: Arc<SessionContext>) -> Result<RecordBatch, ArrowError> {
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "catalog_name",
+            DataType::Utf8,
+            true,
+        )]));
+        let cat_names = ctx.catalog_names();
+        let rb = RecordBatch::try_new(
+            schema,
+            [cat_names]
+                .iter()
+                .map(|i| Arc::new(StringArray::from(i.clone())) as ArrayRef)
+                .collect::<Vec<_>>(),
+        )?;
+        Ok(rb)
+    }
+
+    fn sql_infos(&self) -> Result<RecordBatch, ArrowError> {
+        let map_entries = vec![
+            Field::new("key", DataType::Int32, false),
+            Field::new(
+                "value",
+                DataType::List(Box::new(Field::new("item", DataType::Int32, true))),
+                false,
+            ),
+        ];
+        let fields = vec![
+            Field::new("string_value", DataType::Utf8, false),
+            Field::new("bool_value", DataType::Boolean, false),
+            Field::new("bigint_value", DataType::Int64, false),
+            Field::new("int32_bitmask", DataType::Int32, false),
+            Field::new(
+                "string_list",
+                DataType::List(Box::new(Field::new("item", DataType::Utf8, true))),
+                false,
+            ),
+            Field::new(
+                "int32_to_int32_list_map",
+                DataType::Struct(map_entries.clone()),
+                false,
+            ),
+        ];
+        let schema = Schema::new(vec![
+            Field::new("info_name", DataType::UInt32, false),
+            Field::new(
+                "value",
+                DataType::Union(fields.clone(), vec![0, 1, 2, 3, 4, 5], UnionMode::Dense),
+                false,
+            ),
+        ]);
+
+        let mut builder = ListBuilder::new(StringBuilder::new());
+        let str_ar = builder.finish();
+
+        let data: Vec<Option<Vec<Option<i32>>>> = vec![];
+        let int_array = ListArray::from_iter_primitive::<Int32Type, _, _>(data);
+        let nested = vec![
+            Arc::new(Int32Array::from(Vec::<i32>::new())) as Arc<dyn Array>,
+            Arc::new(int_array),
+        ];
+        let nested: Vec<_> = map_entries.iter().map(|e| e.clone()).zip(nested).collect();
+        let nested = StructArray::from(nested);
+
+        let string_array = StringArray::from(vec!["Apache Arrow Ballista"]);
+        let type_ids = [0_i8];
+        let value_offsets = [0_i32];
+        let type_id_buffer = Buffer::from_slice_ref(&type_ids);
+        let value_offsets_buffer = Buffer::from_slice_ref(&value_offsets);
+        let children: Vec<Arc<dyn Array>> = vec![
+            Arc::new(string_array),
+            Arc::new(BooleanArray::from(Vec::<bool>::new())),
+            Arc::new(Int64Array::from(Vec::<i64>::new())),
+            Arc::new(Int32Array::from(Vec::<i32>::new())),
+            Arc::new(str_ar),
+            Arc::new(nested),
+        ];
+        let children: Vec<(Field, Arc<dyn Array>)> =
+            fields.into_iter().zip(children).collect();
+        let value = Arc::new(UnionArray::try_new(
+            &[0, 1, 2, 3, 4, 5],
+            type_id_buffer,
+            Some(value_offsets_buffer),
+            children,
+        )?);
+        let info_names: UInt32Array =
+            [Some(SqlInfo::FlightSqlServerName as u32)].iter().collect();
+
+        RecordBatch::try_new(SchemaRef::from(schema), vec![Arc::new(info_names), value])
     }
 
     fn table_types() -> Result<RecordBatch, ArrowError> {
@@ -120,15 +382,15 @@ impl FlightSqlServiceImpl {
         RecordBatch::try_new(
             schema,
             [TABLE_TYPES]
-                .into_iter()
+                .iter()
                 .map(|i| Arc::new(StringArray::from(i.to_vec())) as ArrayRef)
                 .collect::<Vec<_>>(),
         )
     }
 
     async fn create_ctx(&self) -> Result<Uuid, Status> {
-        let config_builder = BallistaConfig::builder();
-        let config = config_builder
+        let config = BallistaConfig::builder()
+            .load_env()
             .build()
             .map_err(|e| Status::internal(format!("Error building config: {}", e)))?;
         let ctx = self
@@ -140,6 +402,9 @@ impl FlightSqlServiceImpl {
             .map_err(|e| {
                 Status::internal(format!("Failed to create SessionContext: {:?}", e))
             })?;
+        ctx.refresh_catalogs().await.map_err(|e| {
+            Status::internal(format!("Failed to create SessionContext: {:?}", e))
+        })?;
         let handle = Uuid::new_v4();
         self.contexts.insert(handle.clone(), ctx);
         Ok(handle)
@@ -300,13 +565,17 @@ impl FlightSqlServiceImpl {
         Ok(fieps)
     }
 
-    fn make_local_fieps(&self, job_id: &str) -> Result<Vec<FlightEndpoint>, Status> {
+    fn make_local_fieps(
+        &self,
+        job_id: &str,
+        path: &str,
+    ) -> Result<Vec<FlightEndpoint>, Status> {
         let (host, port) = ("127.0.0.1".to_string(), 50050); // TODO: use advertise host
         let fetch = protobuf::FetchPartition {
             job_id: job_id.to_string(),
             stage_id: 0,
             partition_id: 0,
-            path: job_id.to_string(),
+            path: path.to_string(),
             host: host.clone(),
             port,
         };
@@ -450,13 +719,13 @@ impl FlightSqlServiceImpl {
         let schema = SchemaAsIpc::new(rb.schema().as_ref(), &options).into();
         tx.send(Ok(schema))
             .await
-            .map_err(|e| Status::internal("Error sending schema".to_string()))?;
+            .map_err(|_| Status::internal("Error sending schema".to_string()))?;
         let (dict, flight) = flight_data_from_arrow_batch(&rb, &options);
         let flights = dict.into_iter().chain(std::iter::once(flight));
         for flight in flights.into_iter() {
             tx.send(Ok(flight))
                 .await
-                .map_err(|e| Status::internal("Error sending flight".to_string()))?;
+                .map_err(|_| Status::internal("Error sending flight".to_string()))?;
         }
         let resp = Response::new(Box::pin(ReceiverStream::new(rx))
             as Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send + 'static>>);
@@ -467,12 +736,13 @@ impl FlightSqlServiceImpl {
         &self,
         data: &RecordBatch,
         name: &str,
+        path: &str,
     ) -> Result<Response<FlightInfo>, Status> {
         let num_bytes = batch_byte_size(&data) as i64;
         let schema = data.schema();
         let num_rows = data.num_rows() as i64;
 
-        let fieps = self.make_local_fieps(name)?;
+        let fieps = self.make_local_fieps(name, path)?;
         let schema_bytes = self.schema_to_arrow(schema)?;
         let resp = Self::create_resp(schema_bytes, fieps, num_rows, num_bytes);
         Ok(resp)
@@ -569,17 +839,70 @@ impl FlightSqlService for FlightSqlServiceImpl {
         match fp.job_id.as_str() {
             "get_flight_info_table_types" => {
                 debug!("Responding with table types");
-                let rb = FlightSqlServiceImpl::table_types().map_err(|e| {
+                let rb = FlightSqlServiceImpl::table_types().map_err(|_| {
                     Status::internal("Error getting table types".to_string())
+                })?;
+                let resp = Self::record_batch_to_resp(&rb).await?;
+                return Ok(resp);
+            }
+            "get_flight_info_primary_keys" => {
+                debug!("Responding with primary keys");
+                let rb = FlightSqlServiceImpl::primary_keys().map_err(|_| {
+                    Status::internal("Error getting primary keys".to_string())
+                })?;
+                let resp = Self::record_batch_to_resp(&rb).await?;
+                return Ok(resp);
+            }
+            "get_flight_info_imported_keys" => {
+                debug!("Responding with foreign keys");
+                let rb = FlightSqlServiceImpl::foreign_keys().map_err(|_| {
+                    Status::internal("Error getting foreign keys".to_string())
                 })?;
                 let resp = Self::record_batch_to_resp(&rb).await?;
                 return Ok(resp);
             }
             "get_flight_info_tables" => {
                 debug!("Responding with tables");
+                let path = fp.path.clone();
+                let params = form_urlencoded::parse(path.as_bytes());
+                let mut params: HashMap<Cow<str>, Cow<str>> = HashMap::from_iter(params);
+                let catalog = params.remove("catalog").map(|it| it.to_string());
+                let schema_filter =
+                    params.remove("schema_filter").map(|it| it.to_string());
+                let table_filter = params.remove("table_filter").map(|it| it.to_string());
+                let include_schema = params
+                    .get("include_schema")
+                    .ok_or(Status::internal("include_schema error".to_string()))?;
+                let include_schema = bool::from_str(include_schema)
+                    .map_err(|_| Status::internal("include_schema error".to_string()))?;
                 let rb = self
-                    .tables(ctx)
-                    .map_err(|e| Status::internal("Error getting tables".to_string()))?;
+                    .tables(ctx, &catalog, &schema_filter, &table_filter, include_schema)
+                    .await
+                    .map_err(|_| Status::internal("Error getting tables".to_string()))?;
+                let resp = Self::record_batch_to_resp(&rb).await?;
+                return Ok(resp);
+            }
+            "get_flight_info_schemas" => {
+                debug!("Responding with schemas");
+                let rb = self
+                    .schemas(ctx)
+                    .map_err(|_| Status::internal("Error getting schemas".to_string()))?;
+                let resp = Self::record_batch_to_resp(&rb).await?;
+                return Ok(resp);
+            }
+            "get_flight_info_catalogs" => {
+                debug!("Responding with catalogs");
+                let rb = self.catalogs(ctx).map_err(|_| {
+                    Status::internal("Error getting catalogs".to_string())
+                })?;
+                let resp = Self::record_batch_to_resp(&rb).await?;
+                return Ok(resp);
+            }
+            "get_flight_info_sql_info" => {
+                debug!("Responding with sql infos");
+                let rb = self.sql_infos().map_err(|_| {
+                    Status::internal("Error getting sql_infos".to_string())
+                })?;
                 let resp = Self::record_batch_to_resp(&rb).await?;
                 return Ok(resp);
             }
@@ -644,65 +967,124 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn get_flight_info_catalogs(
         &self,
         _query: CommandGetCatalogs,
-        _request: Request<FlightDescriptor>,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         debug!("get_flight_info_catalogs");
-        Err(Status::unimplemented("Implement get_flight_info_catalogs"))
+        let ctx = self.get_ctx(&request)?;
+        let data = self
+            .catalogs(ctx)
+            .map_err(|e| Status::internal(format!("Error getting catalogs: {}", e)))?;
+        let resp = self.batch_to_schema_resp(&data, "get_flight_info_catalogs", "")?;
+        Ok(resp)
     }
+
     async fn get_flight_info_schemas(
         &self,
-        _query: CommandGetDbSchemas,
-        _request: Request<FlightDescriptor>,
+        query: CommandGetDbSchemas,
+        request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        debug!("get_flight_info_schemas");
-        Err(Status::unimplemented("Implement get_flight_info_schemas"))
+        debug!(
+            "get_flight_info_schemas catalog={:?} filter={:?}",
+            query.catalog, query.db_schema_filter_pattern
+        );
+
+        let ctx = self.get_ctx(&request)?;
+        let data = self
+            .schemas(ctx)
+            .map_err(|e| Status::internal(format!("Error getting schemas: {}", e)))?;
+        let resp = self.batch_to_schema_resp(&data, "get_flight_info_schemas", "")?;
+        Ok(resp)
     }
 
     async fn get_flight_info_tables(
         &self,
-        _query: CommandGetTables,
+        cmd: CommandGetTables,
         request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        debug!("get_flight_info_tables");
+        debug!(
+            "get_flight_info_tables {:?}.{:?}.{:?} schema={}",
+            cmd.catalog,
+            cmd.db_schema_filter_pattern,
+            cmd.table_name_filter_pattern,
+            cmd.include_schema
+        );
         let ctx = self.get_ctx(&request)?;
         let data = self
-            .tables(ctx)
+            .tables(
+                ctx,
+                &cmd.catalog,
+                &cmd.db_schema_filter_pattern,
+                &cmd.table_name_filter_pattern,
+                cmd.include_schema,
+            )
+            .await
             .map_err(|e| Status::internal(format!("Error getting tables: {}", e)))?;
-        let resp = self.batch_to_schema_resp(&data, "get_flight_info_tables")?;
+
+        // encode parameters into "path"
+        let str = String::new();
+        let include_schema = cmd.include_schema.to_string();
+        let mut builder = form_urlencoded::Serializer::new(str);
+        builder.append_pair("include_schema", include_schema.as_str());
+        if let Some(catalog) = cmd.catalog.clone() {
+            builder.append_pair("catalog", catalog.as_str());
+        }
+        if let Some(schema_filter) = cmd.db_schema_filter_pattern.clone() {
+            builder.append_pair("schema_filter", schema_filter.as_str());
+        }
+        if let Some(table_filter) = cmd.table_name_filter_pattern.clone() {
+            builder.append_pair("table_filter", table_filter.as_str());
+        }
+        let path = builder.finish();
+        let resp =
+            self.batch_to_schema_resp(&data, "get_flight_info_tables", path.as_str())?;
         Ok(resp)
     }
 
     async fn get_flight_info_table_types(
         &self,
         _query: CommandGetTableTypes,
-        request: Request<FlightDescriptor>,
+        _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
         debug!("get_flight_info_table_types");
         let data = FlightSqlServiceImpl::table_types()
             .map_err(|e| Status::internal(format!("Error getting table types: {}", e)))?;
-        let resp = self.batch_to_schema_resp(&data, "get_flight_info_table_types")?;
+        let resp = self.batch_to_schema_resp(&data, "get_flight_info_table_types", "")?;
         Ok(resp)
     }
 
     async fn get_flight_info_sql_info(
         &self,
-        _query: CommandGetSqlInfo,
+        query: CommandGetSqlInfo,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        debug!("get_flight_info_sql_info");
-        // TODO: implement for FlightSQL JDBC to work
-        Err(Status::unimplemented("Implement CommandGetSqlInfo"))
+        debug!(
+            "get_flight_info_sql_info requested infos: {}",
+            query.info.iter().map(|i| i.to_string()).join(",")
+        );
+        let data = self
+            .sql_infos()
+            .map_err(|e| Status::internal(format!("Error getting sql info: {}", e)))?;
+        let resp = self.batch_to_schema_resp(&data, "get_flight_info_sql_info", "")?;
+        Ok(resp)
     }
+
     async fn get_flight_info_primary_keys(
         &self,
-        _query: CommandGetPrimaryKeys,
+        query: CommandGetPrimaryKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        debug!("get_flight_info_primary_keys");
-        Err(Status::unimplemented(
-            "Implement get_flight_info_primary_keys",
-        ))
+        debug!(
+            "get_flight_info_primary_keys {:?}.{:?}.{:?}",
+            query.catalog, query.db_schema, query.table
+        );
+        let data = FlightSqlServiceImpl::primary_keys().map_err(|e| {
+            Status::internal(format!("Error getting table primary keys: {}", e))
+        })?;
+        let resp =
+            self.batch_to_schema_resp(&data, "get_flight_info_primary_keys", "")?;
+        Ok(resp)
     }
+
     async fn get_flight_info_exported_keys(
         &self,
         _query: CommandGetExportedKeys,
@@ -713,16 +1095,24 @@ impl FlightSqlService for FlightSqlServiceImpl {
             "Implement get_flight_info_exported_keys",
         ))
     }
+
     async fn get_flight_info_imported_keys(
         &self,
-        _query: CommandGetImportedKeys,
+        query: CommandGetImportedKeys,
         _request: Request<FlightDescriptor>,
     ) -> Result<Response<FlightInfo>, Status> {
-        debug!("get_flight_info_imported_keys");
-        Err(Status::unimplemented(
-            "Implement get_flight_info_imported_keys",
-        ))
+        debug!(
+            "get_flight_info_imported_keys {:?}.{:?}.{:?}",
+            query.catalog, query.db_schema, query.table
+        );
+        let data = FlightSqlServiceImpl::foreign_keys().map_err(|e| {
+            Status::internal(format!("Error getting table foreign keys: {}", e))
+        })?;
+        let resp =
+            self.batch_to_schema_resp(&data, "get_flight_info_imported_keys", "")?;
+        Ok(resp)
     }
+
     async fn get_flight_info_cross_reference(
         &self,
         _query: CommandGetCrossReference,
@@ -761,7 +1151,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         _query: CommandGetCatalogs,
         _request: Request<Ticket>,
     ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
-        debug!("do_get_catalogs");
+        debug!("Implement do_get_catalogs");
         Err(Status::unimplemented("Implement do_get_catalogs"))
     }
     async fn do_get_schemas(

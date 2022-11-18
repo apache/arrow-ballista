@@ -21,7 +21,7 @@
 use clap::ArgEnum;
 use core::fmt;
 use std::collections::HashMap;
-use std::result;
+use std::{env, result};
 
 use crate::error::{BallistaError, Result};
 
@@ -84,6 +84,17 @@ impl BallistaConfigBuilder {
     pub fn set(&self, k: &str, v: &str) -> Self {
         let mut settings = self.settings.clone();
         settings.insert(k.to_owned(), v.to_owned());
+        Self { settings }
+    }
+
+    pub fn load_env(&self) -> Self {
+        let mut settings = self.settings.clone();
+        if let Ok(it) = env::var("DATAFUSION_CATALOG_LOCATION") {
+            settings.insert("datafusion.catalog.location".to_string(), it);
+        }
+        if let Ok(it) = env::var("DATAFUSION_CATALOG_TYPE") {
+            settings.insert("datafusion.catalog.type".to_string(), it);
+        }
         Self { settings }
     }
 

@@ -22,7 +22,7 @@ use crate::{
 };
 use ballista_core::serde::protobuf::PhysicalPlanNode;
 use ballista_core::serde::BallistaCodec;
-use ballista_core::utils::create_grpc_server;
+use ballista_core::utils::{create_grpc_server, SessionBuilder};
 use ballista_core::{
     error::Result, serde::protobuf::scheduler_grpc_server::SchedulerGrpcServer,
     BALLISTA_VERSION,
@@ -32,7 +32,9 @@ use log::info;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 
-pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
+pub async fn new_standalone_scheduler(
+    session_builder: Arc<dyn SessionBuilder>,
+) -> Result<SocketAddr> {
     let client = StandaloneClient::try_new_temporary()?;
 
     let metrics_collector = default_metrics_collector()?;
@@ -42,6 +44,7 @@ pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
             "localhost:50050".to_owned(),
             Arc::new(client),
             BallistaCodec::default(),
+            session_builder,
             SchedulerConfig::default(),
             metrics_collector,
         );

@@ -584,7 +584,7 @@ mod test {
     };
     use ballista_core::serde::scheduler::ExecutorSpecification;
     use ballista_core::serde::BallistaCodec;
-    use ballista_core::utils::default_session_builder;
+    use ballista_core::utils::DefaultSessionBuilder;
 
     use crate::state::executor_manager::DEFAULT_EXECUTOR_TIMEOUT_SECONDS;
     use crate::state::{backend::standalone::StandaloneClient, SchedulerState};
@@ -593,12 +593,14 @@ mod test {
 
     #[tokio::test]
     async fn test_poll_work() -> Result<(), BallistaError> {
+        let session_builder = Arc::new(DefaultSessionBuilder {});
         let state_storage = Arc::new(StandaloneClient::try_new_temporary()?);
         let mut scheduler: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
             SchedulerServer::new(
                 "localhost:50050".to_owned(),
                 state_storage.clone(),
                 BallistaCodec::default(),
+                session_builder,
                 SchedulerConfig::default(),
                 default_metrics_collector().unwrap(),
             );
@@ -625,7 +627,7 @@ mod test {
         let state: SchedulerState<LogicalPlanNode, PhysicalPlanNode> =
             SchedulerState::new_with_default_scheduler_name(
                 state_storage.clone(),
-                default_session_builder,
+                Arc::new(DefaultSessionBuilder {}),
                 BallistaCodec::default(),
             );
         state.init().await?;
@@ -658,7 +660,7 @@ mod test {
         let state: SchedulerState<LogicalPlanNode, PhysicalPlanNode> =
             SchedulerState::new_with_default_scheduler_name(
                 state_storage.clone(),
-                default_session_builder,
+                Arc::new(DefaultSessionBuilder {}),
                 BallistaCodec::default(),
             );
         state.init().await?;
@@ -680,12 +682,14 @@ mod test {
 
     #[tokio::test]
     async fn test_stop_executor() -> Result<(), BallistaError> {
+        let session_builder = Arc::new(DefaultSessionBuilder {});
         let state_storage = Arc::new(StandaloneClient::try_new_temporary()?);
         let mut scheduler: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
             SchedulerServer::new(
                 "localhost:50050".to_owned(),
                 state_storage.clone(),
                 BallistaCodec::default(),
+                session_builder,
                 SchedulerConfig::default(),
                 default_metrics_collector().unwrap(),
             );
@@ -761,12 +765,14 @@ mod test {
     #[tokio::test]
     #[ignore]
     async fn test_expired_executor() -> Result<(), BallistaError> {
+        let session_builder = Arc::new(DefaultSessionBuilder {});
         let state_storage = Arc::new(StandaloneClient::try_new_temporary()?);
         let mut scheduler: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
             SchedulerServer::new(
                 "localhost:50050".to_owned(),
                 state_storage.clone(),
                 BallistaCodec::default(),
+                session_builder,
                 SchedulerConfig::default(),
                 default_metrics_collector().unwrap(),
             );

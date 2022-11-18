@@ -22,15 +22,14 @@ use ballista_core::error::Result;
 use ballista_core::event_loop::{EventLoop, EventSender};
 use ballista_core::serde::protobuf::{StopExecutorParams, TaskStatus};
 use ballista_core::serde::{AsExecutionPlan, BallistaCodec};
-use ballista_core::utils::default_session_builder;
 
-use datafusion::execution::context::SessionState;
 use datafusion::logical_expr::LogicalPlan;
-use datafusion::prelude::{SessionConfig, SessionContext};
+use datafusion::prelude::SessionContext;
 use datafusion_proto::logical_plan::AsLogicalPlan;
 
 use crate::config::SchedulerConfig;
 use crate::metrics::SchedulerMetricsCollector;
+use ballista_core::utils::SessionBuilder;
 use log::{error, warn};
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
@@ -54,8 +53,6 @@ mod external_scaler;
 mod grpc;
 mod query_stage_scheduler;
 
-pub(crate) type SessionBuilder = fn(SessionConfig) -> SessionState;
-
 #[derive(Clone)]
 pub struct SchedulerServer<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> {
     pub scheduler_name: String,
@@ -70,12 +67,13 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         scheduler_name: String,
         config_backend: Arc<dyn StateBackendClient>,
         codec: BallistaCodec<T, U>,
+        session_builder: Arc<dyn SessionBuilder>,
         config: SchedulerConfig,
         metrics_collector: Arc<dyn SchedulerMetricsCollector>,
     ) -> Self {
         let state = Arc::new(SchedulerState::new(
             config_backend,
-            default_session_builder,
+            session_builder,
             codec,
             scheduler_name.clone(),
             config.clone(),
@@ -102,13 +100,14 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         scheduler_name: String,
         config_backend: Arc<dyn StateBackendClient>,
         codec: BallistaCodec<T, U>,
+        session_builder: Arc<dyn SessionBuilder>,
         config: SchedulerConfig,
         metrics_collector: Arc<dyn SchedulerMetricsCollector>,
         task_launcher: Arc<dyn TaskLauncher>,
     ) -> Self {
         let state = Arc::new(SchedulerState::with_task_launcher(
             config_backend,
-            default_session_builder,
+            session_builder,
             codec,
             scheduler_name.clone(),
             config.clone(),
@@ -328,6 +327,7 @@ mod test {
         ExecutorData, ExecutorMetadata, ExecutorSpecification,
     };
     use ballista_core::serde::BallistaCodec;
+    use ballista_core::utils::DefaultSessionBuilder;
 
     use crate::scheduler_server::{timestamp_millis, SchedulerServer};
     use crate::state::backend::standalone::StandaloneClient;
@@ -598,12 +598,14 @@ mod test {
     async fn test_scheduler(
         scheduling_policy: TaskSchedulingPolicy,
     ) -> Result<SchedulerServer<LogicalPlanNode, PhysicalPlanNode>> {
+        let session_builder = Arc::new(DefaultSessionBuilder {});
         let state_storage = Arc::new(StandaloneClient::try_new_temporary()?);
         let mut scheduler: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
             SchedulerServer::new(
                 "localhost:50050".to_owned(),
                 state_storage.clone(),
                 BallistaCodec::default(),
+                session_builder,
                 SchedulerConfig::default().with_scheduler_policy(scheduling_policy),
                 Arc::new(TestMetricsCollector::default()),
             );
