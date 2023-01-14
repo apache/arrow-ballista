@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-FROM rust:1.63.0-buster
+FROM rust:1.63.0-bullseye
 
 ARG EXT_UID
 
@@ -25,6 +25,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
     apt-get -y install libssl-dev openssl zlib1g zlib1g-dev libpq-dev cmake protobuf-compiler netcat curl unzip \
+    python3-venv \
     nodejs npm && \
     npm install -g yarn
 

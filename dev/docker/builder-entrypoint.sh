@@ -27,3 +27,12 @@ cargo build --features flight-sql --profile $RELEASE_FLAG "$@"
 cd ballista/scheduler/ui
 yarn install
 yarn build
+
+cd $HOME/workspace/python
+python3 -m venv venv
+source venv/bin/activate
+python3 -m pip install -U pip
+python3 -m pip install -r requirements-310.txt
+maturin build
+
+cd /home/builder/workspace/

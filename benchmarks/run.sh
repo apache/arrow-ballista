@@ -34,6 +34,6 @@ done
 #TODO: add query 16 once we support it
 for query in 1 2 3 5 6 7 8 9 10 11 14 15 17 18 19 20 21 22
 do
-  /root/tpch benchmark ballista --host ballista-scheduler --port 50050 --query $query --path /data --format tbl --iterations 1 --debug
+  python3 tpch.py --host ballista-scheduler --query $query --path /data --ext tbl 
 done
 

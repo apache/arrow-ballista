@@ -12,3 +12,4 @@ target/
 !target/release/ballista-scheduler
 !target/release/ballista-executor
 !target/release/tpch
+!python/target/wheels/

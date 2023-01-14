@@ -22,12 +22,18 @@ ARG RELEASE_FLAG=release
 ENV RELEASE_FLAG=${RELEASE_FLAG}
 ENV RUST_LOG=info
 ENV RUST_BACKTRACE=full
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get -y install python3 python3-pip
 
 COPY target/$RELEASE_FLAG/ballista-scheduler /root/ballista-scheduler
 COPY target/$RELEASE_FLAG/ballista-executor /root/ballista-executor
 COPY target/$RELEASE_FLAG/tpch /root/tpch
+COPY python/target/wheels/ballista-*-manylinux*.whl /root/
+RUN pip3 install /root/ballista-*-manylinux*.whl
 
 COPY benchmarks/run.sh /root/run.sh
+COPY benchmarks/tpch.py /root/tpch.py
 COPY benchmarks/queries/ /root/benchmarks/queries
 
 WORKDIR /root
