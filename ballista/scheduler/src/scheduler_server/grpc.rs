@@ -35,6 +35,8 @@ use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::file_format::FileFormat;
 use datafusion_proto::logical_plan::AsLogicalPlan;
 use datafusion_proto::physical_plan::AsExecutionPlan;
+use datafusion_substrait::serializer::deserialize_bytes;
+
 use futures::TryStreamExt;
 use log::{debug, error, info, trace, warn};
 use object_store::{local::LocalFileSystem, path::Path, ObjectStore};
@@ -44,6 +46,7 @@ use std::sync::Arc;
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
 use datafusion::prelude::SessionContext;
+use datafusion_substrait::logical_plan::consumer::from_substrait_plan;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tonic::{Request, Response, Status};
 
@@ -408,6 +411,20 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerGrpc
             };
 
             let plan = match query {
+                Query::SubstraitPlan(bytes) => {
+                    let plan = deserialize_bytes(bytes).await.map_err(|e| {
+                        let msg = format!("Could not parse substrait plan: {e}");
+                        error!("{}", msg);
+                        Status::internal(msg)
+                    })?;
+
+                    let mut ctx = session_ctx.as_ref().clone();
+                    from_substrait_plan(&mut ctx, &plan).await.map_err(|e| {
+                        let msg = format!("Could not parse substrait plan: {e}");
+                        error!("{}", msg);
+                        Status::internal(msg)
+                    })?
+                }
                 Query::LogicalPlan(message) => T::try_decode(message.as_slice())
                     .and_then(|m| {
                         m.try_into_logical_plan(

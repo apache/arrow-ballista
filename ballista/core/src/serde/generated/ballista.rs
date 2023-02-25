@@ -900,7 +900,7 @@ pub struct UpdateTaskStatusResult {
 pub struct ExecuteQueryParams {
     #[prost(message, repeated, tag = "4")]
     pub settings: ::prost::alloc::vec::Vec<KeyValuePair>,
-    #[prost(oneof = "execute_query_params::Query", tags = "1, 2")]
+    #[prost(oneof = "execute_query_params::Query", tags = "1, 2, 5")]
     pub query: ::core::option::Option<execute_query_params::Query>,
     #[prost(oneof = "execute_query_params::OptionalSessionId", tags = "3")]
     pub optional_session_id: ::core::option::Option<
@@ -916,6 +916,8 @@ pub mod execute_query_params {
         LogicalPlan(::prost::alloc::vec::Vec<u8>),
         #[prost(string, tag = "2")]
         Sql(::prost::alloc::string::String),
+        #[prost(bytes, tag = "5")]
+        SubstraitPlan(::prost::alloc::vec::Vec<u8>),
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]

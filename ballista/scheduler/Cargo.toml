@@ -53,6 +53,7 @@ configure_me = "0.4.0"
 dashmap = "5.4.0"
 datafusion = "18.0.0"
 datafusion-proto = "18.0.0"
+datafusion-substrait = "18.0.0"
 etcd-client = { version = "0.10", optional = true }
 flatbuffers = { version = "22.9.29" }
 futures = "0.3"

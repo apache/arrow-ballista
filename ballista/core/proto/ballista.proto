@@ -533,6 +533,7 @@ message ExecuteQueryParams {
   oneof query {
     bytes logical_plan = 1;
     string sql = 2;
+    bytes substrait_plan = 5;
   }
   oneof optional_session_id {
     string session_id = 3;
