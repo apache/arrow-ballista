@@ -29,9 +29,10 @@ use datafusion_proto::protobuf::LogicalPlanNode;
 use datafusion_proto::protobuf::PhysicalPlanNode;
 use log::info;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::net::TcpListener;
 
-pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
+pub async fn new_standalone_scheduler(timeout: Duration) -> Result<SocketAddr> {
     let metrics_collector = default_metrics_collector()?;
 
     let cluster = BallistaCluster::new_kv(
@@ -60,7 +61,7 @@ pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
         BALLISTA_VERSION, addr
     );
     tokio::spawn(
-        create_grpc_server()
+        create_grpc_server(timeout)
             .add_service(server)
             .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(
                 listener,

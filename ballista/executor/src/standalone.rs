@@ -32,6 +32,7 @@ use datafusion_proto::logical_plan::AsLogicalPlan;
 use datafusion_proto::physical_plan::AsExecutionPlan;
 use log::info;
 use std::sync::Arc;
+use std::time::Duration;
 use tempfile::TempDir;
 use tokio::net::TcpListener;
 use tonic::transport::Channel;
@@ -44,6 +45,7 @@ pub async fn new_standalone_executor<
     scheduler: SchedulerGrpcClient<Channel>,
     concurrent_tasks: usize,
     codec: BallistaCodec<T, U>,
+    timeout: Duration,
 ) -> Result<()> {
     // Let the OS assign a random, free port
     let listener = TcpListener::bind("localhost:0").await?;
@@ -89,7 +91,7 @@ pub async fn new_standalone_executor<
     let service = BallistaFlightService::new();
     let server = FlightServiceServer::new(service);
     tokio::spawn(
-        create_grpc_server()
+        create_grpc_server(timeout)
             .add_service(server)
             .serve_with_incoming(tokio_stream::wrappers::TcpListenerStream::new(
                 listener,

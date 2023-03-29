@@ -21,7 +21,7 @@ use datafusion::logical_expr::PlanVisitor;
 use std::any::type_name;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
 
@@ -117,6 +117,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
             executor_manager: ExecutorManager::new(
                 cluster.cluster_state(),
                 config.executor_slots_policy,
+                Duration::from_secs(config.grpc_client_connection_timeout),
             ),
             task_manager: TaskManager::new(
                 cluster.job_state(),
@@ -141,6 +142,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
             executor_manager: ExecutorManager::new(
                 cluster.cluster_state(),
                 config.executor_slots_policy,
+                Duration::from_secs(config.grpc_client_connection_timeout),
             ),
             task_manager: TaskManager::with_launcher(
                 cluster.job_state(),

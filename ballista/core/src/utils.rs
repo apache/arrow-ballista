@@ -400,13 +400,14 @@ impl<T: 'static + AsLogicalPlan> QueryPlanner for BallistaQueryPlanner<T> {
 
 pub async fn create_grpc_client_connection<D>(
     dst: D,
+    timeout: Duration,
 ) -> std::result::Result<Channel, Error>
 where
     D: std::convert::TryInto<tonic::transport::Endpoint>,
     D::Error: Into<StdError>,
 {
     let endpoint = tonic::transport::Endpoint::new(dst)?
-        .connect_timeout(Duration::from_secs(20))
+        .connect_timeout(timeout)
         .timeout(Duration::from_secs(20))
         // Disable Nagle's Algorithm since we don't want packets to wait
         .tcp_nodelay(true)
@@ -417,9 +418,9 @@ where
     endpoint.connect().await
 }
 
-pub fn create_grpc_server() -> Server {
+pub fn create_grpc_server(timeout: Duration) -> Server {
     Server::builder()
-        .timeout(Duration::from_secs(20))
+        .timeout(timeout)
         // Disable Nagle's Algorithm since we don't want packets to wait
         .tcp_nodelay(true)
         .tcp_keepalive(Option::Some(Duration::from_secs(3600)))

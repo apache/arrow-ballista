@@ -246,6 +246,7 @@ pub fn remove_unresolved_shuffles(
             new_children.push(Arc::new(ShuffleReaderExec::try_new(
                 relevant_locations,
                 unresolved_shuffle.schema().clone(),
+                Default::default(),
             )?))
         } else {
             new_children.push(remove_unresolved_shuffles(child, partition_locations)?);

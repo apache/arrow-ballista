@@ -147,3 +147,15 @@ name = "executor_termination_grace_period"
 type = "u64"
 default = "30"
 doc = "Time in seconds an executor should be considered lost after it enters terminating status"
+
+[[param]]
+name = "grpc_client_connection_timeout"
+type = "u64"
+default = "20"
+doc = "Time in seconds before the gRPC connection is timed out"
+
+[[param]]
+name = "grpc_server_connection_timeout"
+type = "u64"
+default = "20"
+doc = "Time in seconds before the gRPC connection times out a request"

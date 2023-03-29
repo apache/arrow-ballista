@@ -578,7 +578,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let addr = format!("http://{}:{}", fp.host, fp.port);
         debug!("Scheduler proxying flight for to {}", addr);
         let connection =
-            create_grpc_client_connection(addr.clone())
+            create_grpc_client_connection(addr.clone(), Duration::from_secs(20))
                 .await
                 .map_err(|e| {
                     Status::internal(format!(

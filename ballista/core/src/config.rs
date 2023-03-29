@@ -30,6 +30,7 @@ use datafusion::arrow::datatypes::DataType;
 pub const BALLISTA_JOB_NAME: &str = "ballista.job.name";
 pub const BALLISTA_DEFAULT_SHUFFLE_PARTITIONS: &str = "ballista.shuffle.partitions";
 pub const BALLISTA_DEFAULT_BATCH_SIZE: &str = "ballista.batch.size";
+pub const BALLISTA_GRPC_CONNECTION_TIMEOUT: &str = "ballista.client.timeout";
 pub const BALLISTA_REPARTITION_JOINS: &str = "ballista.repartition.joins";
 pub const BALLISTA_REPARTITION_AGGREGATIONS: &str = "ballista.repartition.aggregations";
 pub const BALLISTA_REPARTITION_WINDOWS: &str = "ballista.repartition.windows";
@@ -166,6 +167,9 @@ impl BallistaConfig {
             ConfigEntry::new(BALLISTA_DEFAULT_BATCH_SIZE.to_string(),
                              "Sets the default batch size".to_string(),
                              DataType::UInt16, Some("8192".to_string())),
+            ConfigEntry::new(BALLISTA_GRPC_CONNECTION_TIMEOUT.to_string(),
+                             "Sets the gRPC connection timeout".to_string(),
+                             DataType::UInt16, Some("20".to_string())),
             ConfigEntry::new(BALLISTA_REPARTITION_JOINS.to_string(),
                              "Configuration for repartition joins".to_string(),
                              DataType::Boolean, Some("true".to_string())),
@@ -205,6 +209,10 @@ impl BallistaConfig {
 
     pub fn default_batch_size(&self) -> usize {
         self.get_usize_setting(BALLISTA_DEFAULT_BATCH_SIZE)
+    }
+
+    pub fn grpc_connnection_timeout(&self) -> usize {
+        self.get_usize_setting(BALLISTA_GRPC_CONNECTION_TIMEOUT)
     }
 
     pub fn repartition_joins(&self) -> bool {
@@ -319,6 +327,7 @@ mod tests {
         assert_eq!(16, config.default_shuffle_partitions());
         assert!(!config.default_with_information_schema());
         assert_eq!("", config.default_plugin_dir().as_str());
+        assert_eq!(20, config.grpc_connnection_timeout());
         Ok(())
     }
 

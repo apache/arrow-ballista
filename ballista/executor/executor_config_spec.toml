@@ -125,3 +125,15 @@ name = "log_rotation_policy"
 type = "ballista_core::config::LogRotationPolicy"
 doc = "Tracing log rotation policy, possible values: minutely, hourly, daily, never. Default: daily"
 default = "ballista_core::config::LogRotationPolicy::Daily"
+
+[[param]]
+name = "grpc_server_connection_timeout"
+type = "u64"
+doc = "Controls the timeout for requests handled by grpc servers on the executor."
+default = "20"
+
+[[param]]
+name = "grpc_client_connection_timeout"
+type = "u64"
+doc = "Controls the timeout for establishingn grpc connections."
+default = "20"

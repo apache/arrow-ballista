@@ -119,6 +119,8 @@ async fn main() -> Result<()> {
         job_resubmit_interval_ms: (opt.job_resubmit_interval_ms > 0)
             .then_some(opt.job_resubmit_interval_ms),
         executor_termination_grace_period: opt.executor_termination_grace_period,
+        grpc_client_connection_timeout: opt.grpc_client_connection_timeout,
+        grpc_server_connection_timeout: opt.grpc_server_connection_timeout,
     };
 
     let cluster = BallistaCluster::new_from_config(&config).await?;

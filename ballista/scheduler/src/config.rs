@@ -52,6 +52,9 @@ pub struct SchedulerConfig {
     /// Time in seconds to allow executor for graceful shutdown. Once an executor signals it has entered Terminating status
     /// the scheduler should only consider the executor dead after this time interval has elapsed
     pub executor_termination_grace_period: u64,
+    // Time in seconds before gRPC service connections are timed out
+    pub grpc_client_connection_timeout: u64,
+    pub grpc_server_connection_timeout: u64,
 }
 
 impl Default for SchedulerConfig {
@@ -69,6 +72,8 @@ impl Default for SchedulerConfig {
             cluster_storage: ClusterStorageConfig::Memory,
             job_resubmit_interval_ms: None,
             executor_termination_grace_period: 0,
+            grpc_client_connection_timeout: 20,
+            grpc_server_connection_timeout: 20,
         }
     }
 }
@@ -120,6 +125,16 @@ impl SchedulerConfig {
         interval_seconds: u64,
     ) -> Self {
         self.finished_job_state_clean_up_interval_seconds = interval_seconds;
+        self
+    }
+
+    pub fn with_grpc_server_connection_timeout(mut self, timeout_seconds: u64) -> Self {
+        self.grpc_server_connection_timeout = timeout_seconds;
+        self
+    }
+
+    pub fn with_grpc_client_connection_timeout(mut self, timeout_seconds: u64) -> Self {
+        self.grpc_client_connection_timeout = timeout_seconds;
         self
     }
 

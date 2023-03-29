@@ -20,6 +20,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use std::time::Duration;
 use std::{
     convert::{TryFrom, TryInto},
     task::{Context, Poll},
@@ -56,17 +57,16 @@ pub struct BallistaClient {
 impl BallistaClient {
     /// Create a new BallistaClient to connect to the executor listening on the specified
     /// host and port
-    pub async fn try_new(host: &str, port: u16) -> Result<Self> {
+    pub async fn try_new(host: &str, port: u16, timeout: Duration) -> Result<Self> {
         let addr = format!("http://{host}:{port}");
         debug!("BallistaClient connecting to {}", addr);
-        let connection =
-            create_grpc_client_connection(addr.clone())
-                .await
-                .map_err(|e| {
-                    BallistaError::GrpcConnectionError(format!(
+        let connection = create_grpc_client_connection(addr.clone(), timeout)
+            .await
+            .map_err(|e| {
+                BallistaError::GrpcConnectionError(format!(
                     "Error connecting to Ballista scheduler or executor at {addr}: {e:?}"
                 ))
-                })?;
+            })?;
         let flight_client = FlightServiceClient::new(connection);
         debug!("BallistaClient connected OK");
 

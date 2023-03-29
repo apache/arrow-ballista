@@ -190,8 +190,13 @@ impl<T: 'static + AsLogicalPlan> ExecutionPlan for DistributedQueryExec<T> {
         };
 
         let stream = futures::stream::once(
-            execute_query(self.scheduler_url.clone(), self.session_id.clone(), query)
-                .map_err(|e| ArrowError::ExternalError(Box::new(e))),
+            execute_query(
+                self.scheduler_url.clone(),
+                self.session_id.clone(),
+                query,
+                Duration::from_secs(self.config.grpc_connnection_timeout() as u64),
+            )
+            .map_err(|e| ArrowError::ExternalError(Box::new(e))),
         )
         .try_flatten();
 
@@ -227,12 +232,14 @@ async fn execute_query(
     scheduler_url: String,
     session_id: String,
     query: ExecuteQueryParams,
+    connection_timeout: Duration,
 ) -> Result<impl Stream<Item = Result<RecordBatch>> + Send> {
     info!("Connecting to Ballista scheduler at {}", scheduler_url);
     // TODO reuse the scheduler to avoid connecting to the Ballista scheduler again and again
-    let connection = create_grpc_client_connection(scheduler_url)
-        .await
-        .map_err(|e| DataFusionError::Execution(format!("{e:?}")))?;
+    let connection =
+        create_grpc_client_connection(scheduler_url, connection_timeout.clone())
+            .await
+            .map_err(|e| DataFusionError::Execution(format!("{e:?}")))?;
 
     let mut scheduler = SchedulerGrpcClient::new(connection);
 
@@ -289,8 +296,8 @@ async fn execute_query(
                 break Err(DataFusionError::Execution(msg));
             }
             Some(job_status::Status::Successful(successful)) => {
-                let streams = successful.partition_location.into_iter().map(|p| {
-                    let f = fetch_partition(p)
+                let streams = successful.partition_location.into_iter().map(move |p| {
+                    let f = fetch_partition(p, connection_timeout.clone())
                         .map_err(|e| ArrowError::ExternalError(Box::new(e)));
 
                     futures::stream::once(f).try_flatten()
@@ -304,6 +311,7 @@ async fn execute_query(
 
 async fn fetch_partition(
     location: PartitionLocation,
+    timeout: Duration,
 ) -> Result<SendableRecordBatchStream> {
     let metadata = location.executor_meta.ok_or_else(|| {
         DataFusionError::Internal("Received empty executor metadata".to_owned())
@@ -313,7 +321,7 @@ async fn fetch_partition(
     })?;
     let host = metadata.host.as_str();
     let port = metadata.port as u16;
-    let mut ballista_client = BallistaClient::try_new(host, port)
+    let mut ballista_client = BallistaClient::try_new(host, port, timeout)
         .await
         .map_err(|e| DataFusionError::Execution(format!("{e:?}")))?;
     ballista_client

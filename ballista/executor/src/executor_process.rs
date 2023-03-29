@@ -86,6 +86,8 @@ pub struct ExecutorProcessConfig {
     /// Optional execution engine to use to execute physical plans, will default to
     /// DataFusion if none is provided.
     pub execution_engine: Option<Arc<dyn ExecutionEngine>>,
+    pub grpc_client_connection_timeout: u64,
+    pub grpc_server_connection_timeout: u64,
 }
 
 pub async fn start_executor_process(opt: ExecutorProcessConfig) -> Result<()> {
@@ -190,9 +192,12 @@ pub async fn start_executor_process(opt: ExecutorProcessConfig) -> Result<()> {
 
     let connect_timeout = opt.scheduler_connect_timeout_seconds as u64;
     let connection = if connect_timeout == 0 {
-        create_grpc_client_connection(scheduler_url)
-            .await
-            .context("Could not connect to scheduler")
+        create_grpc_client_connection(
+            scheduler_url,
+            Duration::from_secs(opt.grpc_client_connection_timeout),
+        )
+        .await
+        .context("Could not connect to scheduler")
     } else {
         // this feature was added to support docker-compose so that we can have the executor
         // wait for the scheduler to start, or at least run for 10 seconds before failing so
@@ -202,9 +207,12 @@ pub async fn start_executor_process(opt: ExecutorProcessConfig) -> Result<()> {
         while x.is_none()
             && Instant::now().elapsed().as_secs() - start_time < connect_timeout
         {
-            match create_grpc_client_connection(scheduler_url.clone())
-                .await
-                .context("Could not connect to scheduler")
+            match create_grpc_client_connection(
+                scheduler_url.clone(),
+                Duration::from_secs(opt.grpc_client_connection_timeout),
+            )
+            .await
+            .context("Could not connect to scheduler")
             {
                 Ok(conn) => {
                     info!("Connected to scheduler at {}", scheduler_url);
@@ -282,6 +290,7 @@ pub async fn start_executor_process(opt: ExecutorProcessConfig) -> Result<()> {
                 executor_server::startup(
                     scheduler.clone(),
                     opt.bind_host,
+                    Duration::from_secs(opt.grpc_server_connection_timeout),
                     executor.clone(),
                     default_codec,
                     stop_send,
@@ -300,6 +309,7 @@ pub async fn start_executor_process(opt: ExecutorProcessConfig) -> Result<()> {
     };
     service_handlers.push(tokio::spawn(flight_server_run(
         addr,
+        Duration::from_secs(opt.grpc_server_connection_timeout),
         shutdown_noti.subscribe_for_shutdown(),
     )));
 
@@ -403,6 +413,7 @@ pub async fn start_executor_process(opt: ExecutorProcessConfig) -> Result<()> {
 // Arrow flight service
 async fn flight_server_run(
     addr: SocketAddr,
+    timeout: Duration,
     mut grpc_shutdown: Shutdown,
 ) -> Result<(), BallistaError> {
     let service = BallistaFlightService::new();
@@ -413,7 +424,7 @@ async fn flight_server_run(
     );
 
     let shutdown_signal = grpc_shutdown.recv();
-    let server_future = create_grpc_server()
+    let server_future = create_grpc_server(timeout)
         .add_service(server)
         .serve_with_shutdown(addr, shutdown_signal);
 
