@@ -48,7 +48,7 @@ async-recursion = "1.0.0"
 async-trait = "0.1.41"
 ballista-core = { path = "../core", version = "0.11.0", features = ["s3"] }
 base64 = { version = "0.13", default-features = false }
-clap = { version = "3", features = ["derive", "cargo"] }
+clap = { version = "4", features = ["derive", "cargo"] }
 configure_me = "0.4.0"
 dashmap = "5.4.0"
 datafusion = { workspace = true }
