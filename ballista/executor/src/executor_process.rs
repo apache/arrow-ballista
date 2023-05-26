@@ -50,6 +50,7 @@ use ballista_core::serde::protobuf::{
     ExecutorStoppedParams, HeartBeatParams,
 };
 use ballista_core::serde::BallistaCodec;
+use ballista_core::terminate;
 use ballista_core::utils::{
     create_grpc_client_connection, create_grpc_server, with_object_store_provider,
 };
@@ -62,7 +63,6 @@ use crate::flight_service::BallistaFlightService;
 use crate::metrics::LoggingMetricsCollector;
 use crate::shutdown::Shutdown;
 use crate::shutdown::ShutdownNotifier;
-use crate::terminate;
 use crate::{execution_loop, executor_server};
 
 pub struct ExecutorProcessConfig {

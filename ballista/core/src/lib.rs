@@ -29,6 +29,7 @@ pub mod event_loop;
 pub mod execution_plans;
 /// some plugins
 pub mod plugin;
+pub mod terminate;
 pub mod utils;
 
 #[macro_use]

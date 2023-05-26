@@ -23,6 +23,9 @@ use hyper::{server::conn::AddrStream, service::make_service_fn, Server};
 use log::info;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+use tokio::{signal, time};
 use tonic::transport::server::Connected;
 use tower::Service;
 
@@ -30,6 +33,7 @@ use datafusion_proto::protobuf::{LogicalPlanNode, PhysicalPlanNode};
 
 use ballista_core::serde::protobuf::scheduler_grpc_server::SchedulerGrpcServer;
 use ballista_core::serde::BallistaCodec;
+use ballista_core::terminate;
 use ballista_core::utils::create_grpc_server;
 use ballista_core::BALLISTA_VERSION;
 
@@ -40,6 +44,10 @@ use crate::flight_sql::FlightSqlServiceImpl;
 use crate::metrics::default_metrics_collector;
 use crate::scheduler_server::externalscaler::external_scaler_server::ExternalScalerServer;
 use crate::scheduler_server::SchedulerServer;
+
+/// Global flag indicating whether the scheduler is terminating.
+/// Might want to expand this to an enum represents the scheduler's state in the future.
+pub static TERMINATING: AtomicBool = AtomicBool::new(false);
 
 pub async fn start_server(
     cluster: BallistaCluster,
@@ -69,8 +77,26 @@ pub async fn start_server(
 
     scheduler_server.init().await?;
 
-    Server::bind(&addr)
-        .serve(make_service_fn(move |request: &AddrStream| {
+    let shutdown_future = async {
+        tokio::select! {
+            _ = signal::ctrl_c() => {
+                info!("Scheduler received ctrl-c event.");
+            },
+            _ = terminate::sig_term() => {
+                info!("scheduler received terminate signal.");
+            },
+        };
+
+        info!("Scheduler is shutting down.");
+        TERMINATING.store(true, Ordering::Release);
+
+        time::sleep(Duration::from_secs(30)).await;
+
+        Result::<(), anyhow::Error>::Ok(())
+    };
+
+    let server_future =
+        Server::bind(&addr).serve(make_service_fn(move |request: &AddrStream| {
             let scheduler_grpc_server =
                 SchedulerGrpcServer::new(scheduler_server.clone());
 
@@ -113,7 +139,14 @@ pub async fn start_server(
                     )
                 },
             ))
-        }))
-        .await
-        .context("Could not start grpc server")
+        }));
+
+    tokio::select! {
+        result = shutdown_future => {
+            result.context("Could not gracefully shutdown scheduler.")
+        }
+        result = server_future => {
+            result.context("Could not start grpc server")
+        }
+    }
 }

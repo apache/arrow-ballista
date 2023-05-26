@@ -18,6 +18,7 @@
 use ballista_core::config::{BallistaConfig, BALLISTA_JOB_NAME};
 use ballista_core::serde::protobuf::execute_query_params::{OptionalSessionId, Query};
 use std::convert::TryInto;
+use std::sync::atomic::Ordering;
 
 use ballista_core::serde::protobuf::executor_registration::OptionalHost;
 use ballista_core::serde::protobuf::scheduler_grpc_server::SchedulerGrpc;
@@ -42,6 +43,7 @@ use object_store::{local::LocalFileSystem, path::Path, ObjectStore};
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::scheduler_process::TERMINATING;
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
 use datafusion::prelude::SessionContext;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -328,6 +330,10 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerGrpc
         &self,
         request: Request<ExecuteQueryParams>,
     ) -> Result<Response<ExecuteQueryResult>, Status> {
+        if TERMINATING.load(Ordering::Acquire) {
+            return Err(Status::unavailable("Scheduler is shutting down."));
+        }
+
         let query_params = request.into_inner();
         if let ExecuteQueryParams {
             query: Some(query),
