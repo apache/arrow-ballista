@@ -35,6 +35,7 @@ use arrow_flight::{
     Action, FlightData, FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest,
     HandshakeResponse, Location, Ticket,
 };
+use base64::{engine::general_purpose, Engine as _};
 use log::{debug, error, warn};
 use std::convert::TryFrom;
 use std::pin::Pin;
@@ -504,7 +505,8 @@ impl FlightSqlService for FlightSqlServiceImpl {
             )))?;
         }
         let base64 = &authorization[basic.len()..];
-        let bytes = base64::decode(base64)
+        let bytes = general_purpose::STANDARD
+            .decode(base64)
             .map_err(|_| Status::invalid_argument("authorization not parsable"))?;
         let str = String::from_utf8(bytes)
             .map_err(|_| Status::invalid_argument("authorization not parsable"))?;
