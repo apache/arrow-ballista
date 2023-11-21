@@ -15,22 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#![doc = include_str ! ("../README.md")]
+use crate::auth::Authorizer;
+use async_trait::async_trait;
+use tonic::Status;
 
-pub mod api;
-pub mod auth;
-pub mod cluster;
-pub mod config;
-pub mod display;
-pub mod metrics;
-pub mod planner;
-pub mod scheduler_process;
-pub mod scheduler_server;
-#[cfg(feature = "sled")]
-pub mod standalone;
-pub mod state;
+pub struct JWTAuthorizer {}
 
-#[cfg(feature = "flight-sql")]
-pub mod flight_sql;
-#[cfg(test)]
-pub mod test_utils;
+#[async_trait]
+impl Authorizer for JWTAuthorizer {
+    async fn validate(&self, value: &str) -> Result<(), Status> {
+        todo!()
+    }
+}

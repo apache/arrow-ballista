@@ -35,6 +35,7 @@ use ballista_core::utils::create_grpc_server;
 use ballista_core::BALLISTA_VERSION;
 
 use crate::api::{get_routes, EitherBody, Error};
+use crate::auth::authorizer_from_config;
 use crate::cluster::BallistaCluster;
 use crate::config::SchedulerConfig;
 use crate::flight_sql::FlightSqlServiceImpl;
@@ -58,6 +59,7 @@ pub async fn start_server(
     );
 
     let metrics_collector = default_metrics_collector()?;
+    let handshake_authorizer = authorizer_from_config(config.clone())?;
 
     let mut scheduler_server: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
         SchedulerServer::new(
@@ -66,6 +68,7 @@ pub async fn start_server(
             BallistaCodec::default(),
             config,
             metrics_collector,
+            handshake_authorizer,
         );
 
     scheduler_server.init().await?;

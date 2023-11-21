@@ -157,6 +157,9 @@ async fn main() -> Result<()> {
         grpc_server_max_decoding_message_size: opt.grpc_server_max_decoding_message_size,
         executor_timeout_seconds: opt.executor_timeout_seconds,
         expire_dead_executor_interval_seconds: opt.expire_dead_executor_interval_seconds,
+        client_auth_basic_username: opt.client_auth_basic_username,
+        client_auth_basic_password: opt.client_auth_basic_password,
+        client_auth_method: opt.client_auth_method,
     };
 
     let cluster = BallistaCluster::new_from_config(&config).await?;

@@ -182,3 +182,22 @@ name = "expire_dead_executor_interval_seconds"
 type = "u64"
 doc = "The interval to check expired or dead executors"
 default = "15"
+
+[[param]]
+name = "client_auth_method"
+type = "String"
+doc = "Method for authorizing client connections. Possible values: basic, jwt. Default: basic"
+default = "std::string::String::from(\"basic\")"
+
+[[param]]
+name = "client_auth_basic_username"
+type = "String"
+doc = "Username for authorizing client connections when client_auth_method is set to basic. Default: admin"
+default = "std::string::String::from(\"admin\")"
+
+[[param]]
+name = "client_auth_basic_password"
+type = "String"
+doc = "Password for authorizing client connections when auth_method is set to basic. Default: admin"
+default = "std::string::String::from(\"password\")"
+

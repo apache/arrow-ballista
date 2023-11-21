@@ -349,6 +349,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan>
 
 #[cfg(test)]
 mod tests {
+    use crate::auth::default_handshake_authorizer;
     use crate::config::SchedulerConfig;
     use crate::test_utils::{await_condition, SchedulerTest, TestMetricsCollector};
     use ballista_core::config::TaskSchedulingPolicy;
@@ -369,6 +370,7 @@ mod tests {
         let plan = test_plan(10);
 
         let metrics_collector = Arc::new(TestMetricsCollector::default());
+        let handshake_authorizer = default_handshake_authorizer();
 
         let mut test = SchedulerTest::new(
             SchedulerConfig::default()
@@ -377,6 +379,7 @@ mod tests {
             1,
             1,
             None,
+            handshake_authorizer,
         )
         .await?;
 

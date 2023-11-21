@@ -55,6 +55,7 @@ use datafusion::test_util::scan_empty;
 use crate::cluster::BallistaCluster;
 use crate::scheduler_server::event::QueryStageSchedulerEvent;
 
+use crate::auth::Authorizer;
 use crate::state::execution_graph::{ExecutionGraph, TaskDescription};
 use ballista_core::utils::default_session_builder;
 use datafusion_proto::protobuf::{LogicalPlanNode, PhysicalPlanNode};
@@ -384,6 +385,7 @@ impl SchedulerTest {
         num_executors: usize,
         task_slots_per_executor: usize,
         runner: Option<Arc<dyn TaskRunner>>,
+        handshake_authorizer: Arc<dyn Authorizer>,
     ) -> Result<Self> {
         let cluster = BallistaCluster::new_from_config(&config).await?;
 
@@ -427,6 +429,7 @@ impl SchedulerTest {
                 Arc::new(config),
                 metrics_collector,
                 Arc::new(launcher),
+                handshake_authorizer,
             );
         scheduler.init().await?;
 

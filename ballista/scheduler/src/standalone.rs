@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use crate::auth::default_handshake_authorizer;
 use crate::cluster::BallistaCluster;
 use crate::config::SchedulerConfig;
 use crate::metrics::default_metrics_collector;
@@ -34,6 +35,7 @@ use tokio::net::TcpListener;
 
 pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
     let metrics_collector = default_metrics_collector()?;
+    let handshake_authorizer = default_handshake_authorizer();
 
     let cluster = BallistaCluster::new_kv(
         SledClient::try_new_temporary()?,
@@ -49,6 +51,7 @@ pub async fn new_standalone_scheduler() -> Result<SocketAddr> {
             BallistaCodec::default(),
             Arc::new(SchedulerConfig::default()),
             metrics_collector,
+            handshake_authorizer,
         );
 
     scheduler_server.init().await?;

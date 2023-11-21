@@ -60,6 +60,12 @@ pub struct SchedulerConfig {
     pub executor_timeout_seconds: u64,
     /// The interval to check expired or dead executors
     pub expire_dead_executor_interval_seconds: u64,
+    /// Authorization method to use.
+    pub client_auth_method: String,
+    /// Username to accept for basic authentication.
+    pub client_auth_basic_username: String,
+    /// Password to accept for basic authentication.
+    pub client_auth_basic_password: String,
 }
 
 impl Default for SchedulerConfig {
@@ -81,6 +87,9 @@ impl Default for SchedulerConfig {
             grpc_server_max_decoding_message_size: 16777216,
             executor_timeout_seconds: 180,
             expire_dead_executor_interval_seconds: 15,
+            client_auth_method: "basic".to_string(),
+            client_auth_basic_username: "admin".to_string(),
+            client_auth_basic_password: "password".to_string(),
         }
     }
 }

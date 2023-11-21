@@ -491,32 +491,17 @@ impl FlightSqlService for FlightSqlServiceImpl {
             debug!("{:?}", md);
         }
 
-        let basic = "Basic ";
         let authorization = request
             .metadata()
             .get("authorization")
             .ok_or_else(|| Status::invalid_argument("authorization field not present"))?
             .to_str()
             .map_err(|_| Status::invalid_argument("authorization not parsable"))?;
-        if !authorization.starts_with(basic) {
-            Err(Status::invalid_argument(format!(
-                "Auth type not implemented: {authorization}"
-            )))?;
-        }
-        let base64 = &authorization[basic.len()..];
-        let bytes = base64::decode(base64)
-            .map_err(|_| Status::invalid_argument("authorization not parsable"))?;
-        let str = String::from_utf8(bytes)
-            .map_err(|_| Status::invalid_argument("authorization not parsable"))?;
-        let parts: Vec<_> = str.split(':').collect();
-        if parts.len() != 2 {
-            Err(Status::invalid_argument("Invalid authorization header"))?;
-        }
-        let user = parts[0];
-        let pass = parts[1];
-        if user != "admin" || pass != "password" {
-            Err(Status::unauthenticated("Invalid credentials!"))?
-        }
+
+        self.server
+            .handshake_authorizer
+            .validate(authorization)
+            .await?;
 
         let token = self.create_ctx().await?;
 

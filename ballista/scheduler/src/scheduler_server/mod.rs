@@ -29,6 +29,7 @@ use datafusion::prelude::{SessionConfig, SessionContext};
 use datafusion_proto::logical_plan::AsLogicalPlan;
 use datafusion_proto::physical_plan::AsExecutionPlan;
 
+use crate::auth::Authorizer;
 use crate::cluster::BallistaCluster;
 use crate::config::SchedulerConfig;
 use crate::metrics::SchedulerMetricsCollector;
@@ -64,6 +65,7 @@ pub struct SchedulerServer<T: 'static + AsLogicalPlan, U: 'static + AsExecutionP
     pub(crate) query_stage_event_loop: EventLoop<QueryStageSchedulerEvent>,
     query_stage_scheduler: Arc<QueryStageScheduler<T, U>>,
     config: Arc<SchedulerConfig>,
+    pub handshake_authorizer: Arc<dyn Authorizer>,
 }
 
 impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T, U> {
@@ -73,6 +75,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         codec: BallistaCodec<T, U>,
         config: Arc<SchedulerConfig>,
         metrics_collector: Arc<dyn SchedulerMetricsCollector>,
+        handshake_authorizer: Arc<dyn Authorizer>,
     ) -> Self {
         let state = Arc::new(SchedulerState::new(
             cluster,
@@ -98,6 +101,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
             query_stage_event_loop,
             query_stage_scheduler,
             config,
+            handshake_authorizer,
         }
     }
 
@@ -109,6 +113,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
         config: Arc<SchedulerConfig>,
         metrics_collector: Arc<dyn SchedulerMetricsCollector>,
         task_launcher: Arc<dyn TaskLauncher>,
+        handshake_authorizer: Arc<dyn Authorizer>,
     ) -> Self {
         let state = Arc::new(SchedulerState::new_with_task_launcher(
             cluster,
@@ -135,6 +140,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerServer<T
             query_stage_event_loop,
             query_stage_scheduler,
             config,
+            handshake_authorizer,
         }
     }
 
@@ -365,6 +371,9 @@ mod test {
     };
     use ballista_core::serde::BallistaCodec;
 
+    use crate::auth::basic::BasicAuthorizer;
+    use crate::auth::default_handshake_authorizer;
+
     use crate::scheduler_server::{timestamp_millis, SchedulerServer};
 
     use crate::test_utils::{
@@ -486,6 +495,7 @@ mod test {
         let plan = test_plan();
 
         let metrics_collector = Arc::new(TestMetricsCollector::default());
+        let handshake_authorizer = default_handshake_authorizer();
 
         let mut test = SchedulerTest::new(
             SchedulerConfig::default()
@@ -494,6 +504,7 @@ mod test {
             4,
             1,
             None,
+            handshake_authorizer,
         )
         .await?;
 
@@ -561,6 +572,7 @@ mod test {
         ));
 
         let metrics_collector = Arc::new(TestMetricsCollector::default());
+        let handshake_authorizer = default_handshake_authorizer();
 
         let mut test = SchedulerTest::new(
             SchedulerConfig::default()
@@ -569,6 +581,7 @@ mod test {
             4,
             1,
             Some(runner),
+            handshake_authorizer,
         )
         .await?;
 
@@ -597,6 +610,7 @@ mod test {
     #[tokio::test]
     async fn test_planning_failure() -> Result<()> {
         let metrics_collector = Arc::new(TestMetricsCollector::default());
+        let handshake_authorizer = default_handshake_authorizer();
         let mut test = SchedulerTest::new(
             SchedulerConfig::default()
                 .with_scheduler_policy(TaskSchedulingPolicy::PushStaged),
@@ -604,6 +618,7 @@ mod test {
             4,
             1,
             None,
+            handshake_authorizer,
         )
         .await?;
 
@@ -650,6 +665,10 @@ mod test {
                 BallistaCodec::default(),
                 Arc::new(config),
                 Arc::new(TestMetricsCollector::default()),
+                Arc::new(BasicAuthorizer::new(
+                    "admin".to_string(),
+                    "password".to_string(),
+                )),
             );
         scheduler.init().await?;
 

@@ -649,6 +649,7 @@ mod test {
     use datafusion_proto::protobuf::PhysicalPlanNode;
     use tonic::Request;
 
+    use crate::auth::default_handshake_authorizer;
     use crate::config::SchedulerConfig;
     use crate::metrics::default_metrics_collector;
     use ballista_core::error::BallistaError;
@@ -678,6 +679,7 @@ mod test {
                 BallistaCodec::default(),
                 Arc::new(config),
                 default_metrics_collector().unwrap(),
+                default_handshake_authorizer(),
             );
         scheduler.init().await?;
         let exec_meta = ExecutorRegistration {
@@ -765,6 +767,7 @@ mod test {
                 BallistaCodec::default(),
                 Arc::new(config),
                 default_metrics_collector().unwrap(),
+                default_handshake_authorizer(),
             );
         scheduler.init().await?;
 
@@ -850,6 +853,7 @@ mod test {
                 BallistaCodec::default(),
                 Arc::new(config),
                 default_metrics_collector().unwrap(),
+                default_handshake_authorizer(),
             );
         scheduler.init().await?;
 
@@ -903,6 +907,7 @@ mod test {
                 BallistaCodec::default(),
                 Arc::new(config),
                 default_metrics_collector().unwrap(),
+                default_handshake_authorizer(),
             );
         scheduler.init().await?;
 
