@@ -564,12 +564,10 @@ mod tests {
 
     #[tokio::test]
     #[cfg(feature = "standalone")]
-    #[ignore]
-    // Tracking: https://github.com/apache/arrow-datafusion/issues/1840
     async fn test_task_stuck_when_referenced_task_failed() {
         use super::*;
         use datafusion::arrow::datatypes::Schema;
-        use datafusion::arrow::util::pretty;
+        use datafusion::arrow::error::ArrowError;
         use datafusion::datasource::file_format::csv::CsvFormat;
         use datafusion::datasource::listing::{
             ListingOptions, ListingTable, ListingTableConfig,
@@ -639,8 +637,12 @@ mod tests {
             .sql("select count(1) from single_nan;")
             .await
             .unwrap();
-        let results = df.collect().await.unwrap();
-        pretty::print_batches(&results).unwrap();
+        let result = df.collect().await;
+
+        assert!(matches!(
+            result.err(),
+            Some(DataFusionError::ArrowError(ArrowError::ExternalError(_)))
+        ));
     }
 
     #[tokio::test]
