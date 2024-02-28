@@ -346,12 +346,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Restore rust artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: rust-artifacts
           path: /home/runner/work/arrow-ballista/arrow-ballista/target/release
       - name: Restore react artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: react-artifacts
           path: /home/runner/work/arrow-ballista/arrow-ballista/ballista/scheduler/ui/build
