@@ -875,6 +875,7 @@ fn get_schema(table: &str) -> Schema {
             Field::new("p_container", DataType::Utf8, false),
             Field::new("p_retailprice", DataType::Decimal128(15, 2), false),
             Field::new("p_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "supplier" => Schema::new(vec![
@@ -885,6 +886,7 @@ fn get_schema(table: &str) -> Schema {
             Field::new("s_phone", DataType::Utf8, false),
             Field::new("s_acctbal", DataType::Decimal128(15, 2), false),
             Field::new("s_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "partsupp" => Schema::new(vec![
@@ -893,6 +895,7 @@ fn get_schema(table: &str) -> Schema {
             Field::new("ps_availqty", DataType::Int32, false),
             Field::new("ps_supplycost", DataType::Decimal128(15, 2), false),
             Field::new("ps_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "customer" => Schema::new(vec![
@@ -904,6 +907,7 @@ fn get_schema(table: &str) -> Schema {
             Field::new("c_acctbal", DataType::Decimal128(15, 2), false),
             Field::new("c_mktsegment", DataType::Utf8, false),
             Field::new("c_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "orders" => Schema::new(vec![
@@ -916,6 +920,7 @@ fn get_schema(table: &str) -> Schema {
             Field::new("o_clerk", DataType::Utf8, false),
             Field::new("o_shippriority", DataType::Int32, false),
             Field::new("o_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "lineitem" => Schema::new(vec![
@@ -935,6 +940,7 @@ fn get_schema(table: &str) -> Schema {
             Field::new("l_shipinstruct", DataType::Utf8, false),
             Field::new("l_shipmode", DataType::Utf8, false),
             Field::new("l_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "nation" => Schema::new(vec![
@@ -942,12 +948,14 @@ fn get_schema(table: &str) -> Schema {
             Field::new("n_name", DataType::Utf8, false),
             Field::new("n_regionkey", DataType::Int64, false),
             Field::new("n_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         "region" => Schema::new(vec![
             Field::new("r_regionkey", DataType::Int64, false),
             Field::new("r_name", DataType::Utf8, false),
             Field::new("r_comment", DataType::Utf8, false),
+            Field::new("_trailing", DataType::Int8, true),
         ]),
 
         _ => unimplemented!(),
