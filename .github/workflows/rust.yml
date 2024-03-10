@@ -40,14 +40,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # these represent dependencies downloaded by cargo
           # and thus do not depend on the OS, arch nor rust version.
           path: /github/home/.cargo
           key: cargo-cache-
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # these represent compiled steps of both dependencies and arrow
           # and thus are specific for a particular OS, arch and rust version.
@@ -135,13 +135,13 @@ jobs:
           apt-get -qq update && apt-get -y -qq install protobuf-compiler
           protoc --version
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/.cargo
           # this key equals the ones on `linux-build-lib` for re-use
           key: cargo-cache-
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/target
           # this key equals the ones on `linux-build-lib` for re-use
@@ -192,13 +192,13 @@ jobs:
           export PATH=$PATH:$HOME/d/protoc/bin
           protoc --version
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/.cargo
           # this key equals the ones on `linux-build-lib` for re-use
           key: cargo-cache-
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/target
           # this key equals the ones on `linux-build-lib` for re-use
@@ -299,13 +299,13 @@ jobs:
           apt-get -qq update && apt-get -y -qq install protobuf-compiler
           protoc --version
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/.cargo
           # this key equals the ones on `linux-build-lib` for re-use
           key: cargo-cache-
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/target
           # this key equals the ones on `linux-build-lib` for re-use
@@ -390,13 +390,13 @@ jobs:
         with:
           submodules: true
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/.cargo
           # this key equals the ones on `linux-build-lib` for re-use
           key: cargo-cache-
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/target
           # this key equals the ones on `linux-build-lib` for re-use
@@ -433,13 +433,13 @@ jobs:
         with:
           submodules: true
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/.cargo
           # this key equals the ones on `linux-build-lib` for re-use
           key: cargo-cache-
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /github/home/target
           # this key equals the ones on `linux-build-lib` for re-use
@@ -483,13 +483,13 @@ jobs:
 #       with:
 #         submodules: true
 #     - name: Cache Cargo
-#       uses: actions/cache@v3
+#       uses: actions/cache@v4
 #       with:
 #         path: /home/runner/.cargo
 #         # this key is not equal because the user is different than on a container (runner vs github)
 #         key: cargo-coverage-cache-
 #     - name: Cache Rust dependencies
-#       uses: actions/cache@v3
+#       uses: actions/cache@v4
 #       with:
 #         path: /home/runner/target
 #         # this key is not equal because coverage uses different compilation flags.
