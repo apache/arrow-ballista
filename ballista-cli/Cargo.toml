@@ -34,7 +34,7 @@ clap = { version = "3", features = ["derive", "cargo"] }
 datafusion = { workspace = true }
 datafusion-cli = { workspace = true }
 dirs = "5.0.1"
-env_logger = "0.10"
+env_logger = "0.11"
 mimalloc = { version = "0.1", default-features = false }
 num_cpus = "1.13.0"
 rustyline = "11.0"
