@@ -56,7 +56,7 @@ datafusion-proto = { workspace = true }
 etcd-client = { version = "0.12", optional = true }
 flatbuffers = { version = "23.5.26" }
 futures = "0.3"
-graphviz-rust = "0.6.1"
+graphviz-rust = "0.7.2"
 http = "0.2"
 http-body = "0.4"
 hyper = "0.14.4"
