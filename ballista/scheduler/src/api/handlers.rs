@@ -110,11 +110,13 @@ pub(crate) async fn get_jobs<T: AsLogicalPlan, U: AsExecutionPlan>(
     // TODO: Display last seen information in UI
     let state = data_server.state;
 
-    let jobs = state
+    let mut jobs = state
         .task_manager
         .get_jobs()
         .await
         .map_err(|_| warp::reject())?;
+
+    jobs.sort_by(|a, b| b.start_time.cmp(&a.start_time));
 
     let jobs: Vec<JobResponse> = jobs
         .iter()

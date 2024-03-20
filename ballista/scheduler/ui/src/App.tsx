@@ -24,6 +24,7 @@ import {
   TabPanel,
   TabPanels,
   Tabs,
+  useInterval,
   VStack,
 } from "@chakra-ui/react";
 import { Header } from "./components/Header";
@@ -32,6 +33,8 @@ import { ExecutorsList } from "./components/ExecutorsList";
 import { QueriesList } from "./components/QueriesList";
 import { Footer } from "./components/Footer";
 import "./App.css";
+
+const REFRESH_TABLE_INTERVAL = 800; // 0.8s
 
 const App: React.FunctionComponent<any> = () => {
   const [schedulerState, setSchedulerState] = useState(undefined);
@@ -70,6 +73,19 @@ const App: React.FunctionComponent<any> = () => {
       .then((res) => res.json())
       .then((res) => setExecutors(res));
   }
+
+  useInterval(async () => {
+    const new_jobs = await fetch(`/api/jobs`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    }).then((res) => res.json());
+
+    if (jobs !== new_jobs) {
+      getJobs();
+    }
+  }, REFRESH_TABLE_INTERVAL);
 
   useEffect(() => {
     getSchedulerState();
