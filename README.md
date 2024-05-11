@@ -20,7 +20,7 @@
 # Ballista: Distributed SQL Query Engine, built on Apache Arrow
 
 Ballista is a distributed SQL query engine powered by the Rust implementation of [Apache Arrow][arrow] and
-[Apache Arrow DataFusion][datafusion].
+[Apache DataFusion][datafusion].
 
 If you are looking for documentation for a released version of Ballista, please refer to the
 [Ballista User Guide][user-guide].
@@ -93,7 +93,7 @@ Ballista is maturing quickly and is now working towards being production ready. 
 Please see the [Contribution Guide](CONTRIBUTING.md) for information about contributing to Ballista.
 
 [arrow]: https://arrow.apache.org/
-[datafusion]: https://github.com/apache/arrow-datafusion
+[datafusion]: https://github.com/apache/datafusion
 [flight]: https://arrow.apache.org/blog/2019/10/13/introducing-arrow-flight/
 [flight-sql]: https://arrow.apache.org/blog/2022/02/16/introducing-arrow-flight-sql/
 [ballista-talk]: https://www.youtube.com/watch?v=ZZHQaOap9pQ

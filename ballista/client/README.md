@@ -17,7 +17,7 @@
   under the License.
 -->
 
-# Ballista: Distributed Scheduler for Apache Arrow DataFusion
+# Ballista: Distributed Scheduler for Apache DataFusion
 
 Ballista is a distributed compute platform primarily implemented in Rust, and powered by Apache Arrow and
 DataFusion. It is built on an architecture that allows other programming languages (such as Python, C++, and
