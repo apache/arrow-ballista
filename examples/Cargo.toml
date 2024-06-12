@@ -46,4 +46,4 @@ tokio = { version = "1.0", features = [
     "sync",
     "parking_lot"
 ] }
-tonic = "0.10"
+tonic = "0.11"
