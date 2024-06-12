@@ -49,11 +49,11 @@ pub async fn exec_from_lines(
                 let line = line.trim_end();
                 query.push_str(line);
                 if line.ends_with(';') {
-                    match exec_and_print(ctx, print_options, query).await {
+                    match exec_and_print(ctx, print_options, query.clone()).await {
                         Ok(_) => {}
                         Err(err) => println!("{err:?}"),
                     }
-                    query = "".to_owned();
+                    "".clone_into(&mut query);
                 } else {
                     query.push('\n');
                 }

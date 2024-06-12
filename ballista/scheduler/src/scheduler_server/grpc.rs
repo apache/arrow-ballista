@@ -36,6 +36,7 @@ use ballista_core::serde::protobuf::{
 };
 use ballista_core::serde::scheduler::ExecutorMetadata;
 
+use datafusion::datasource::file_format::csv::CsvFormat;
 use datafusion::datasource::file_format::parquet::ParquetFormat;
 use datafusion::datasource::file_format::FileFormat;
 use datafusion_proto::logical_plan::AsLogicalPlan;
@@ -297,13 +298,24 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerGrpc
         // TODO shouldn't this take a ListingOption object as input?
 
         let GetFileMetadataParams { path, file_type } = request.into_inner();
-        let file_format: Arc<dyn FileFormat> = match file_type.as_str() {
+        let file_format: Result<Arc<dyn FileFormat>, Status> = match file_type.as_str() {
             "parquet" => Ok(Arc::new(ParquetFormat::default())),
-            // TODO implement for CSV
+            "csv" => {
+                let format = CsvFormat::default()
+                    .with_delimiter(b',')
+                    .with_has_header(true);
+                Ok(Arc::new(format))
+            }
+            "tbl" => {
+                let format = CsvFormat::default()
+                    .with_delimiter(b'|')
+                    .with_has_header(false);
+                Ok(Arc::new(format))
+            }
             _ => Err(tonic::Status::unimplemented(
                 "get_file_metadata unsupported file type",
             )),
-        }?;
+        };
 
         let path = Path::from(path.as_str());
         let file_metas: Vec<_> = obj_store
@@ -316,7 +328,7 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerGrpc
                 tonic::Status::internal(msg)
             })?;
 
-        let schema = file_format
+        let schema = file_format?
             .infer_schema(&state, &obj_store, &file_metas)
             .await
             .map_err(|e| {
@@ -641,15 +653,17 @@ mod test {
 
     use datafusion_proto::protobuf::LogicalPlanNode;
     use datafusion_proto::protobuf::PhysicalPlanNode;
-    use tonic::Request;
+    use object_store::path::Path;
+    use tempfile::NamedTempFile;
+    use tonic::{Code, Request};
 
     use crate::config::SchedulerConfig;
     use crate::metrics::default_metrics_collector;
     use ballista_core::error::BallistaError;
     use ballista_core::serde::protobuf::{
         executor_registration::OptionalHost, executor_status, ExecutorRegistration,
-        ExecutorStatus, ExecutorStoppedParams, HeartBeatParams, PollWorkParams,
-        RegisterExecutorParams,
+        ExecutorStatus, ExecutorStoppedParams, GetFileMetadataParams,
+        GetFileMetadataResult, HeartBeatParams, PollWorkParams, RegisterExecutorParams,
     };
     use ballista_core::serde::scheduler::ExecutorSpecification;
     use ballista_core::serde::BallistaCodec;
@@ -829,6 +843,68 @@ mod test {
         let expired_executors = state.executor_manager.get_expired_executors();
         assert!(expired_executors.is_empty());
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_file_metadata() -> Result<(), BallistaError> {
+        let cluster = test_cluster_context();
+        let config = SchedulerConfig::default();
+        let mut scheduler: SchedulerServer<LogicalPlanNode, PhysicalPlanNode> =
+            SchedulerServer::new(
+                "localhost:50050".to_owned(),
+                cluster,
+                BallistaCodec::default(),
+                Arc::new(config),
+                default_metrics_collector().unwrap(),
+            );
+        scheduler.init().await?;
+
+        let test_file = NamedTempFile::new()?;
+        let source_location_str =
+            Path::from(test_file.as_ref().to_str().unwrap()).to_string();
+
+        let requests = vec![
+            Request::new(GetFileMetadataParams {
+                path: source_location_str.clone(),
+                file_type: "parquet".to_string(),
+            }),
+            Request::new(GetFileMetadataParams {
+                path: source_location_str.clone(),
+                file_type: "csv".to_string(),
+            }),
+            Request::new(GetFileMetadataParams {
+                path: source_location_str.clone(),
+                file_type: "tbl".to_string(),
+            }),
+        ];
+        for request in requests {
+            let response = scheduler
+                .get_file_metadata(request)
+                .await
+                .expect("Received error response")
+                .into_inner();
+            assert_eq!(
+                response,
+                GetFileMetadataResult {
+                    schema: Some(datafusion_proto::protobuf::Schema {
+                        columns: vec![],
+                        metadata: Default::default(),
+                    }),
+                }
+            );
+        }
+
+        let request: Request<GetFileMetadataParams> =
+            Request::new(GetFileMetadataParams {
+                path: source_location_str,
+                file_type: "avro".to_string(),
+            });
+        let avro_response = scheduler
+            .get_file_metadata(request)
+            .await
+            .expect_err("get_file_metadata unsupported file type");
+        assert_eq!(avro_response.code(), Code::Unimplemented);
         Ok(())
     }
 

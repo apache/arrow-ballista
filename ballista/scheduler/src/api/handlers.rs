@@ -33,6 +33,7 @@ struct SchedulerStateResponse {
     version: &'static str,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, serde::Serialize)]
 struct ExecutorsResponse {
     executors: Vec<ExecutorMetaResponse>,

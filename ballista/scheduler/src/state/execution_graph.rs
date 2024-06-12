@@ -340,7 +340,7 @@ impl ExecutionGraph {
 
                             match failed_reason {
                                 Some(FailedReason::FetchPartitionError(
-                                    fetch_partiton_error,
+                                    fetch_partition_error,
                                 )) => {
                                     let failed_attempts = failed_stage_attempts
                                         .entry(stage_id)
@@ -348,12 +348,12 @@ impl ExecutionGraph {
                                     failed_attempts.insert(task_stage_attempt_num);
                                     if failed_attempts.len() < max_stage_failures {
                                         let map_stage_id =
-                                            fetch_partiton_error.map_stage_id as usize;
-                                        let map_partition_id = fetch_partiton_error
+                                            fetch_partition_error.map_stage_id as usize;
+                                        let map_partition_id = fetch_partition_error
                                             .map_partition_id
                                             as usize;
                                         let executor_id =
-                                            fetch_partiton_error.executor_id;
+                                            fetch_partition_error.executor_id;
 
                                         if !failed_stages.is_empty() {
                                             let error_msg = format!(
@@ -436,7 +436,7 @@ impl ExecutionGraph {
                             successful_task,
                         )) = task_status.status
                         {
-                            // update task metrics for successfu task
+                            // update task metrics for successful task
                             running_stage
                                 .update_task_metrics(partition_id, operator_metrics)?;
 
@@ -510,30 +510,31 @@ impl ExecutionGraph {
                                         failed_stages.insert(stage_id, failed_task.error);
                                     }
                                     Some(FailedReason::FetchPartitionError(
-                                        fetch_partiton_error,
+                                        fetch_partition_error,
                                     )) if failed_stages.is_empty()
                                         && current_running_stages.contains(
-                                            &(fetch_partiton_error.map_stage_id as usize),
+                                            &(fetch_partition_error.map_stage_id
+                                                as usize),
                                         )
                                         && !unsolved_stage
                                             .last_attempt_failure_reasons
                                             .contains(
-                                                &fetch_partiton_error.executor_id,
+                                                &fetch_partition_error.executor_id,
                                             ) =>
                                     {
                                         should_ignore = false;
                                         unsolved_stage
                                             .last_attempt_failure_reasons
                                             .insert(
-                                                fetch_partiton_error.executor_id.clone(),
+                                                fetch_partition_error.executor_id.clone(),
                                             );
                                         let map_stage_id =
-                                            fetch_partiton_error.map_stage_id as usize;
-                                        let map_partition_id = fetch_partiton_error
+                                            fetch_partition_error.map_stage_id as usize;
+                                        let map_partition_id = fetch_partition_error
                                             .map_partition_id
                                             as usize;
                                         let executor_id =
-                                            fetch_partiton_error.executor_id;
+                                            fetch_partition_error.executor_id;
                                         let removed_map_partitions = unsolved_stage
                                             .remove_input_partitions(
                                                 map_stage_id,
