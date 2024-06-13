@@ -257,7 +257,7 @@ impl PhysicalExtensionCodec for BallistaPhysicalExtensionCodec {
                     protobuf::ShuffleReaderExecNode {
                         stage_id,
                         partition,
-                        schema: Some(exec.schema().as_ref().try_into()?),
+                        schema: Some(exec.schema.as_ref().try_into()?),
                     },
                 )),
             };
@@ -273,7 +273,7 @@ impl PhysicalExtensionCodec for BallistaPhysicalExtensionCodec {
                 physical_plan_type: Some(PhysicalPlanType::UnresolvedShuffle(
                     protobuf::UnresolvedShuffleExecNode {
                         stage_id: exec.stage_id as u32,
-                        schema: Some(exec.schema().as_ref().try_into()?),
+                        schema: Some(exec.schema.as_ref().try_into()?),
                         output_partition_count: exec.output_partition_count as u32,
                     },
                 )),
