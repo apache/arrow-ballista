@@ -220,7 +220,7 @@ impl<S: KeyValueStore, T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan>
         active_jobs: Arc<HashMap<String, JobInfoCache>>,
         executors: Option<HashSet<String>>,
     ) -> Result<Vec<BoundTask>> {
-        let lock = self.store.lock(Keyspace::Slots, "global").await?;
+        let lock = self.store.lock(Keyspace::Slots, "all").await?;
 
         with_lock(lock, async {
             let resources = self.store.get(Keyspace::Slots, "all").await?;
