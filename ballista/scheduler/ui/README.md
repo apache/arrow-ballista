@@ -21,6 +21,11 @@
 
 ## Start project from source
 
+### Pre-requisites
+
+To view the job graph, you must first install [Graphviz](https://graphviz.org/download/)
+on your machine.
+
 ### Run scheduler/executor
 
 First, run scheduler from project:

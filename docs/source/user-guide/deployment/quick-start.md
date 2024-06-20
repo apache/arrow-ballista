@@ -27,6 +27,7 @@ Project Requirements:
 - [Protobuf Compiler](https://protobuf.dev/downloads/)
 - [Node.js](https://nodejs.org/en/download)
 - [Yarn](https://classic.yarnpkg.com/lang/en/docs/install)
+- [Graphviz](https://graphviz.org/download/)
 
 ### Build the project
 
