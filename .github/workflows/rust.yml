@@ -38,7 +38,7 @@ jobs:
         # "1" means line tables only, which is useful for panic tracebacks.
         RUSTFLAGS: "-C debuginfo=1"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Cache Cargo
         uses: actions/cache@v3
         with:
@@ -80,7 +80,7 @@ jobs:
       env:
         DEBIAN_FRONTEND: "noninteractive"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
           cat /etc/*-release
@@ -126,7 +126,7 @@ jobs:
         # "1" means line tables only, which is useful for panic tracebacks.
         RUSTFLAGS: "-C debuginfo=1"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install protobuf compiler
@@ -178,7 +178,7 @@ jobs:
         # "1" means line tables only, which is useful for panic tracebacks.
         RUSTFLAGS: "-C debuginfo=1"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install protobuf compiler
@@ -230,7 +230,7 @@ jobs:
         os: [windows-latest, macos-latest]
         rust: [stable]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install protobuf macos compiler
@@ -290,7 +290,7 @@ jobs:
         # "1" means line tables only, which is useful for panic tracebacks.
         RUSTFLAGS: "-C debuginfo=1"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install protobuf compiler
@@ -324,7 +324,7 @@ jobs:
     container:
       image: amd64/rust
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup toolchain
         run: |
           rustup toolchain install stable
@@ -344,7 +344,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Restore rust artifacts
         uses: actions/download-artifact@v2
         with:
@@ -386,7 +386,7 @@ jobs:
         # "1" means line tables only, which is useful for panic tracebacks.
         RUSTFLAGS: "-C debuginfo=1"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Cache Cargo
@@ -429,7 +429,7 @@ jobs:
         # "1" means line tables only, which is useful for panic tracebacks.
         RUSTFLAGS: "-C debuginfo=1"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Cache Cargo
@@ -479,7 +479,7 @@ jobs:
 #       arch: [amd64]
 #       rust: [stable]
 #   steps:
-#     - uses: actions/checkout@v3
+#     - uses: actions/checkout@v4
 #       with:
 #         submodules: true
 #     - name: Cache Cargo
