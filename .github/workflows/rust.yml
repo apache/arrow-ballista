@@ -65,7 +65,7 @@ jobs:
           CARGO_HOME: "/github/home/.cargo"
           CARGO_TARGET_DIR: "/github/home/target"
       - name: Save artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: rust-artifacts
           path: |
@@ -104,7 +104,7 @@ jobs:
           yarn install
           yarn build
       - name: Save artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: react-artifacts
           path: |
