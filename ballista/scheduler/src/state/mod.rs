@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use datafusion::common::tree_node::{TreeNode, VisitRecursion};
+use datafusion::common::tree_node::{Transformed, TreeNode, VisitRecursion};
 use datafusion::datasource::listing::{ListingTable, ListingTableUrl};
 use datafusion::datasource::source_as_provider;
 use datafusion::error::DataFusionError;
@@ -39,6 +39,7 @@ use ballista_core::serde::protobuf::TaskStatus;
 use ballista_core::serde::BallistaCodec;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::physical_plan::display::DisplayableExecutionPlan;
+use datafusion::physical_plan::empty::EmptyExec;
 use datafusion::prelude::SessionContext;
 use datafusion_proto::logical_plan::AsLogicalPlan;
 use datafusion_proto::physical_plan::AsExecutionPlan;
@@ -405,6 +406,18 @@ impl<T: 'static + AsLogicalPlan, U: 'static + AsExecutionPlan> SchedulerState<T,
         let plan = session_ctx.state().create_physical_plan(plan).await?;
         debug!(
             "Physical plan: {}",
+            DisplayableExecutionPlan::new(plan.as_ref()).indent(false)
+        );
+
+        let plan = plan.transform_down(&|node| {
+            if node.output_partitioning().partition_count() == 0 {
+                Ok(Transformed::Yes(Arc::new(EmptyExec::new(node.schema()))))
+            } else {
+                Ok(Transformed::No(node))
+            }
+        })?;
+        debug!(
+            "Transformed physical plan: {}",
             DisplayableExecutionPlan::new(plan.as_ref()).indent(false)
         );
 
