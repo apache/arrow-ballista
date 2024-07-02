@@ -48,7 +48,7 @@ dashmap = "5.4.0"
 datafusion = { workspace = true }
 datafusion-proto = { workspace = true }
 futures = "0.3"
-hyper = "0.14.4"
+hyper = "1.4.0"
 log = "0.4"
 mimalloc = { version = "0.1", default-features = false, optional = true }
 num_cpus = "1.13.0"

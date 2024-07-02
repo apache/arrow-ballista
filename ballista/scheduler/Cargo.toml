@@ -59,7 +59,7 @@ futures = "0.3"
 graphviz-rust = "0.8.0"
 http = "0.2"
 http-body = "0.4"
-hyper = "0.14.4"
+hyper = "1.4.0"
 itertools = "0.12.0"
 log = "0.4"
 object_store = { workspace = true }
